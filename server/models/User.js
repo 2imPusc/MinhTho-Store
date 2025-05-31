@@ -5,9 +5,10 @@ const userSchema = new mongoose.Schema({
     role: {type: String, enum: ['admin', 'user'], default: 'user'},
     name: {type: String, required: true},
     phone: {type: String, required: true, unique: true},
-    password: {type: String, required: true},
+    password: {type: String, required: true, minlength: 6},
     location: {type: String},
-    createdAt: {type: Date, default: Date.now}
+    createdAt: {type: Date, default: Date.now},
+    refreshToken: {type: String}
 });
 
 //hash password before save
