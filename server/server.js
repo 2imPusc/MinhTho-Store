@@ -10,12 +10,13 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT','DELETE'],
 }));
 //Auth
-const authRoutes = require('./routes/authRoutes');
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', require('./routes/authRoutes'));
 
 //Product
 app.use('/api/products', require('./routes/productRoutes'));
 
+//Supplier
+app.use('/api/supplier', require('./routes/supplierRoutes'));
 connectDB();
 
 const PORT = process.env.PORT || 5000;

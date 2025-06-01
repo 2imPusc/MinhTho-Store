@@ -122,9 +122,62 @@ const validateProduct = (req, res, next) => {
     next();
 };
 
+const validateSupplierCreate = (req, res, next) => {
+    const schema = Joi.object({
+        name: Joi.string().min(3).max(100).required().messages({
+            'string.empty': 'Tên nhà cung cấp không được để trống',
+            'string.min': 'Tên nhà cung cấp phải có ít nhất 3 ký tự',
+            'string.max': 'Tên nhà cung cấp không được vượt quá 100 ký tự',
+            'any.required': 'Tên nhà cung cấp là bắt buộc'
+        }),
+        phone: Joi.string().pattern(/^[0-9]{10}$/).optional().messages({
+            'string.pattern.base': 'Số điện thoại nhà cung cấp phải có đúng 10 chữ số'
+        }),
+        paymentInfo: Joi.string().optional().allow('').messages({
+            'string.empty': 'Thông tin thanh toán có thể để trống'
+        }),
+        address: Joi.string().optional().allow('').messages({
+            'string.empty': 'Địa chỉ có thể để trống'
+        }),
+        note: Joi.string().optional().allow('').messages({
+            'string.empty': 'Ghi chú có thể để trống'
+        })
+    });
+
+    const { error } = schema.validate(req.body, { abortEarly: false });
+    if (error) {
+        const errors = error.details.map(detail => detail.message);
+        return res.status(400).json({ message: 'Validation error', errors });
+    }
+    next();
+};
+
+const validateSupplierUpdate = (req, res, next) => {
+    const schema = Joi.object({
+        name: Joi.string().min(3).max(100).optional().messages({
+            'string.min': 'Tên nhà cung cấp phải có ít nhất 3 ký tự',
+            'string.max': 'Tên nhà cung cấp không được vượt quá 100 ký tự'
+        }),
+        phone: Joi.string().pattern(/^[0-9]{10}$/).optional().messages({
+            'string.pattern.base': 'Số điện thoại nhà cung cấp phải có đúng 10 chữ số'
+        }),
+        paymentInfo: Joi.string().optional().allow(''),
+        address: Joi.string().optional().allow(''),
+        note: Joi.string().optional().allow('')
+    }).min(1).messages({
+        'object.min': 'Phải cung cấp ít nhất một trường để cập nhật'
+    });
+
+    const { error } = schema.validate(req.body, { abortEarly: false });
+    if (error) {
+        const errors = error.details.map(detail => detail.message);
+        return res.status(400).json({ message: 'Validation error', errors });
+    }
+    next();
+};
+
 module.exports = {
-    validateProduct,
-    validateRegister,
-    validateLogin,
-    validateToken
+    validateRegister, validateLogin, validateToken,
+    validateSupplierCreate, validateSupplierUpdate,
+    validateProduct
 };
