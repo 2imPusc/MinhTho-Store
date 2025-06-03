@@ -69,6 +69,27 @@ const validateToken = (req, res, next) => {
 };
 
 const validateProduct = (req, res, next) => {
+    const supplierInfoSchema = Joi.object({
+        name: Joi.string().min(3).max(100).required().messages({
+            'string.empty': 'Tên nhà cung cấp không được để trống',
+            'string.min': 'Tên nhà cung cấp phải có ít nhất 3 ký tự',
+            'string.max': 'Tên nhà cung cấp không được vượt quá 100 ký tự',
+            'any.required': 'Tên nhà cung cấp là bắt buộc'
+        }),
+        phone: Joi.string().pattern(/^[0-9]{10}$/).optional().messages({
+            'string.pattern.base': 'Số điện thoại nhà cung cấp phải có đúng 10 chữ số'
+        }),
+        paymentInfo: Joi.string().optional().allow('').messages({
+            'string.empty': 'Thông tin thanh toán có thể để trống'
+        }),
+        address: Joi.string().optional().allow('').messages({
+            'string.empty': 'Địa chỉ có thể để trống'
+        }),
+        note: Joi.string().optional().allow('').messages({
+            'string.empty': 'Ghi chú có thể để trống'
+        })
+    });
+
     const schema = Joi.object({
         code: Joi.string().min(3).max(50).required().messages({
             'string.empty': 'Mã sản phẩm không được để trống',
@@ -108,10 +129,15 @@ const validateProduct = (req, res, next) => {
         description: Joi.string().optional().allow('').messages({
             'string.empty': 'Mô tả có thể để trống'
         }),
-        supplier: Joi.string().hex().length(24).optional().messages({
+        supplierId: Joi.string().hex().length(24).optional().messages({
             'string.hex': 'ID nhà cung cấp không hợp lệ',
             'string.length': 'ID nhà cung cấp phải có đúng 24 ký tự'
+        }),
+        supplierInfo: supplierInfoSchema.optional().messages({
+            'object.base': 'Thông tin nhà cung cấp phải là một object'
         })
+    }).oxor('supplierId', 'supplierInfo').messages({
+        'object.oxor': 'Chỉ được cung cấp một trong hai: supplierId hoặc supplierInfo'
     });
 
     const { error } = schema.validate(req.body, { abortEarly: false });
@@ -176,8 +202,69 @@ const validateSupplierUpdate = (req, res, next) => {
     next();
 };
 
+const itemSchema = Joi.object({
+    product: Joi.string().hex().length(24).required().messages({
+        'string.base': 'ID sản phẩm phải là chuỗi',
+        'string.hex': 'ID sản phẩm không hợp lệ',
+        'string.length': 'ID sản phẩm phải có 24 ký tự',
+        'any.required': 'ID sản phẩm là bắt buộc'
+    }),
+    quantity: Joi.number().integer().min(1).required().messages({
+        'number.base': 'Số lượng phải là số',
+        'number.min': 'Số lượng phải lớn hơn 0',
+        'any.required': 'Số lượng là bắt buộc'
+    })
+});
+
+const validateOrderCreate = (req, res, next) => {
+    const schema = Joi.object({
+        user: Joi.alternatives().try(
+            Joi.string().hex().length(24),
+            Joi.object({
+                name: Joi.string().min(2).max(50).required(),
+                phone: Joi.string().pattern(/^[0-9]{10}$/).required(),
+                password: Joi.string().min(6),
+                location: Joi.string().allow('')
+            })
+        ).required(),
+        items: Joi.array().items(itemSchema).min(1).required(),
+        paidAmount: Joi.number().min(0).default(0),
+        paymentMethod: Joi.string().allow(''),
+        paymentNote: Joi.string().allow('')
+    });
+
+    const { error } = schema.validate(req.body, { abortEarly: false });
+    if (error) {
+        const errors = error.details.map(detail => detail.message);
+        return res.status(400).json({ message: 'Validation error', errors });
+    }
+    next();
+};
+
+const validateOrderUpdate = (req, res, next) => {
+    const schema = Joi.object({
+        items: Joi.array().items(itemSchema).min(1),
+        paidAmount: Joi.number().min(0),
+        paymentMethod: Joi.string().allow(''),
+        paymentNote: Joi.string().allow(''),
+        amount: Joi.number().min(0), // cho cập nhật thanh toán
+        method: Joi.string().allow(''),
+        note: Joi.string().allow('')
+    }).min(1).messages({
+        'object.min': 'Phải cung cấp ít nhất một trường để cập nhật'
+    });
+
+    const { error } = schema.validate(req.body, { abortEarly: false });
+    if (error) {
+        const errors = error.details.map(detail => detail.message);
+        return res.status(400).json({ message: 'Validation error', errors });
+    }
+    next();
+};
+
 module.exports = {
     validateRegister, validateLogin, validateToken,
     validateSupplierCreate, validateSupplierUpdate,
-    validateProduct
+    validateProduct,
+    validateOrderCreate, validateOrderUpdate
 };

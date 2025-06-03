@@ -17,6 +17,10 @@ app.use('/api/products', require('./routes/productRoutes'));
 
 //Supplier
 app.use('/api/supplier', require('./routes/supplierRoutes'));
+
+//Order
+app.use('/api/orders', require('./routes/orderRoutes'));
+
 connectDB();
 
 const PORT = process.env.PORT || 5000;
