@@ -39,8 +39,9 @@ coverage/
 .DS_Store
 Thumbs.db
 
-# MongoDB data dump files (nếu có)
+# MongoDB data dump files
 dump/
+backups/
 
 # Frontend build (nếu dùng React frontend tách folder)
 frontend/build/

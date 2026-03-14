@@ -1,70 +1,96 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
-import LoginModal from "../Auth/LoginModal";
-
-const categories = [
-  "Điện thoại",
-  "Laptop",
-  "Phụ kiện",
-  "Đồng hồ",
-];
 
 const Header = () => {
-  const [showModal, setShowModal] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const handleLoginSuccess = (userData) => {
-    if (userData.user.role === 'admin') {
-      navigate('/admin/dashboard');
-    }
+  const handleLogout = async () => {
+    await logout();
+    setShowDropdown(false);
+    navigate("/");
   };
 
   return (
-    <header className="bg-blue-600 text-white p-4">
+    <header className="bg-blue-600 text-white shadow-md">
       {/* Line 1 */}
-      <div>
+      <div className="flex items-center justify-between px-6 py-3">
         {/* Logo */}
-        <div>
-          LOGO MINHTHO
-        </div>
+        <Link to="/" className="text-xl font-bold tracking-wide hover:opacity-90">
+          MINH THO STORE
+        </Link>
+
         {/* Search Bar */}
-        <div>
+        <div className="flex-1 max-w-lg mx-8">
           <input
             type="text"
             placeholder="Tìm kiếm sản phẩm..."
-            className="px-4 py-2 rounded w-full max-w-md"
+            className="w-full px-4 py-2 rounded-lg text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
           />
-          <button>Tim kiem</button>
         </div>
+
         {/* User Actions */}
-        <div>
+        <div className="flex items-center gap-3">
           {!user ? (
-            <div>
-              <button
-              onClick={() => setShowModal(true)}
+            <div className="flex items-center gap-2">
+              <Link
+                to="/login"
+                className="px-4 py-2 bg-white text-blue-600 rounded-lg font-medium hover:bg-gray-100 transition-colors"
               >
-                Dang nhap
-              </button>
+                Đăng nhập
+              </Link>
+              <Link
+                to="/register"
+                className="px-4 py-2 border border-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+              >
+                Đăng ký
+              </Link>
             </div>
-          ):(
-            <div
-              onClick={() => setShowDropdown(!showDropdown)}
-            >
-              <span>{user.user.name}</span>
+          ) : (
+            <div className="relative">
+              <button
+                onClick={() => setShowDropdown(!showDropdown)}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <span className="w-8 h-8 bg-blue-800 rounded-full flex items-center justify-center text-sm font-bold">
+                  {user.user.name.charAt(0).toUpperCase()}
+                </span>
+                <span className="font-medium">{user.user.name}</span>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
               {showDropdown && (
-                <div>
-                  <button>Thong tin tai khoan</button>
-                  <button>Lich su don hang</button>
+                <div className="absolute right-0 mt-2 w-48 bg-white text-gray-800 rounded-lg shadow-lg py-1 z-50">
+                  {user.user.role === "admin" && (
+                    <button
+                      onClick={() => { navigate("/admin/dashboard"); setShowDropdown(false); }}
+                      className="w-full text-left px-4 py-2 hover:bg-gray-100 font-medium text-blue-600"
+                    >
+                      Quản trị
+                    </button>
+                  )}
                   <button
-                    onClick={() => {
-                      logout();
-                      navigate('/');
-                    }}
+                    onClick={() => { setShowDropdown(false); }}
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100"
                   >
-                    Dang xuat
+                    Thông tin tài khoản
+                  </button>
+                  <button
+                    onClick={() => { setShowDropdown(false); }}
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                  >
+                    Lịch sử đơn hàng
+                  </button>
+                  <hr className="my-1" />
+                  <button
+                    onClick={handleLogout}
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100 text-red-600"
+                  >
+                    Đăng xuất
                   </button>
                 </div>
               )}
@@ -72,23 +98,8 @@ const Header = () => {
           )}
         </div>
       </div>
-      {/* Line 2 */}
-      <nav>
-        {categories.map((category, index) => (
-          <button
-            key={index}
-          >
-            {category}
-          </button>
-        ))}
-      </nav>
-      {/* Login Modal */}
-      <LoginModal
-        show={showModal}
-        onClose={() => setShowModal(false)}
-        onSuccess={handleLoginSuccess}
-      />
     </header>
   );
-}
+};
+
 export default Header;

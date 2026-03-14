@@ -17,6 +17,9 @@ const validateRegister = (req, res, next) => {
             'string.min': 'Mật khẩu phải có ít nhất 6 ký tự',
             'any.required': 'Mật khẩu là bắt buộc'
         }),
+        role: Joi.string().valid('admin', 'user').optional().messages({
+            'any.only': 'Role phải là "admin" hoặc "user"'
+        }),
         location: Joi.string().optional().allow('').messages({
             'string.empty': 'Địa điểm có thể để trống'
         })
@@ -262,9 +265,54 @@ const validateOrderUpdate = (req, res, next) => {
     next();
 };
 
+const validateCustomerCreate = (req, res, next) => {
+    const schema = Joi.object({
+        name: Joi.string().min(2).max(100).required().messages({
+            'string.empty': 'Ten khach hang khong duoc de trong',
+            'string.min': 'Ten khach hang phai co it nhat 2 ky tu',
+            'any.required': 'Ten khach hang la bat buoc'
+        }),
+        phone: Joi.string().pattern(/^[0-9]{10}$/).optional().allow('').messages({
+            'string.pattern.base': 'So dien thoai phai co dung 10 chu so'
+        }),
+        address: Joi.string().optional().allow(''),
+        type: Joi.string().valid('le', 'cong_trinh').default('le').messages({
+            'any.only': 'Loai khach hang phai la "le" hoac "cong_trinh"'
+        }),
+        note: Joi.string().optional().allow('')
+    });
+
+    const { error } = schema.validate(req.body, { abortEarly: false });
+    if (error) {
+        const errors = error.details.map(detail => detail.message);
+        return res.status(400).json({ message: 'Validation error', errors });
+    }
+    next();
+};
+
+const validateCustomerUpdate = (req, res, next) => {
+    const schema = Joi.object({
+        name: Joi.string().min(2).max(100).optional(),
+        phone: Joi.string().pattern(/^[0-9]{10}$/).optional().allow(''),
+        address: Joi.string().optional().allow(''),
+        type: Joi.string().valid('le', 'cong_trinh').optional(),
+        note: Joi.string().optional().allow('')
+    }).min(1).messages({
+        'object.min': 'Phai cung cap it nhat mot truong de cap nhat'
+    });
+
+    const { error } = schema.validate(req.body, { abortEarly: false });
+    if (error) {
+        const errors = error.details.map(detail => detail.message);
+        return res.status(400).json({ message: 'Validation error', errors });
+    }
+    next();
+};
+
 module.exports = {
     validateRegister, validateLogin, validateToken,
     validateSupplierCreate, validateSupplierUpdate,
     validateProduct,
-    validateOrderCreate, validateOrderUpdate
+    validateOrderCreate, validateOrderUpdate,
+    validateCustomerCreate, validateCustomerUpdate
 };

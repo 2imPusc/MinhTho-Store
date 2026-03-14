@@ -22,13 +22,15 @@ const authController = {
     //REGISTER
     register: async (req, res) => {
         try {
-            const {name, phone, password, location} = req.body;
-            const existingUser = await User.findOne({phone});
-            if (existingUser) {
-                return res.status(400).json({message: 'This phone number has registered'});
+            const {name, phone, password, location, role} = req.body;
+            if (phone) {
+                const existingUser = await User.findOne({phone});
+                if (existingUser) {
+                    return res.status(400).json({message: 'This phone number has registered'});
+                }
             }
 
-            const newUser = new User({name, phone, password, location});
+            const newUser = new User({name, phone, password, location, role});
             const token = generateToken(newUser);
             const refreshToken = generateRefreshToken(newUser);
             newUser.refreshToken = refreshToken; 

@@ -1,74 +1,69 @@
 const Order = require('../models/Order');
 const Product = require('../models/Product');
-const User = require('../models/User');
+const Customer = require('../models/Customer');
 
 const orderController = {
     // Create a new order
     createOrder: async (req, res) => {
         try {
-            const { user, items, paidAmount = 0, paymentMethod = '', paymentNote = '' } = req.body;
+            const { customerId, items, paidAmount = 0, paymentMethod = '', paymentNote = '', note = '' } = req.body;
 
             if (!items || items.length === 0) {
-                return res.status(400).json({ message: 'Đơn hàng phải có ít nhất 1 sản phẩm' });
+                return res.status(400).json({ message: 'Don hang phai co it nhat 1 san pham' });
             }
 
-            let userId;
-
-            // 👇 Nếu user là object => tạo mới
-            if (typeof user === 'object' && user !== null) {
-                if (!user.name || !user.phone) {
-                    return res.status(400).json({ message: 'Tên và số điện thoại là bắt buộc' });
-                }
-                const existingUser = await User.findOne({phone: user.phone});
-                if (existingUser) {
-                    userId = existingUser._id;
-                } else {
-                    if (!user.password) {
-                        user.password = '123456';
-                    }
-                    const newUser = new User(user);
-                    await newUser.save();
-                    userId = newUser._id;
-                }
-
-            } else {
-                const existingUser = await User.findById(user);
-                if (!existingUser) {
-                    return res.status(404).json({ message: 'Không tìm thấy người dùng' });
-                }
-                userId = existingUser._id;
+            // Validate customer
+            let customer = null;
+            if (customerId) {
+                customer = await Customer.findById(customerId);
+                if (!customer) return res.status(404).json({ message: 'Khong tim thay khach hang' });
             }
 
+            // Calculate total and snapshot prices
             let totalAmount = 0;
+            const orderItems = [];
             for (const item of items) {
-            const product = await Product.findById(item.product);
-                if (!product) return res.status(404).json({ message: `Không tìm thấy sản phẩm với ID ${item.product}` });
-                totalAmount += product.price * item.quantity;
+                const product = await Product.findById(item.product);
+                if (!product) return res.status(404).json({ message: `Khong tim thay san pham voi ID ${item.product}` });
+                const itemPrice = product.price;
+                totalAmount += itemPrice * item.quantity;
+                orderItems.push({
+                    product: product._id,
+                    quantity: item.quantity,
+                    price: itemPrice
+                });
             }
 
             if (paidAmount > totalAmount) {
-                return res.status(400).json({ message: 'Số tiền đã trả không được vượt quá tổng tiền đơn hàng' });
+                return res.status(400).json({ message: 'So tien da tra khong duoc vuot qua tong tien don hang' });
             }
 
             const paymentHistory = [];
             if (paidAmount > 0) {
                 paymentHistory.push({
                     amount: paidAmount,
-                    method: paymentMethod || 'Tiền mặt',
-                    note: paymentNote || 'Thanh toán khi tạo đơn'
+                    method: paymentMethod || 'Tien mat',
+                    note: paymentNote || 'Thanh toan khi tao don'
                 });
             }
 
             const newOrder = new Order({
-                User: userId,
-                items,
+                customer: customer ? customer._id : null,
+                items: orderItems,
                 totalAmount,
                 paidAmount,
-                paymentHistory
+                paymentHistory,
+                note,
+                createdBy: req.user.id
             });
 
             await newOrder.save();
-            res.status(201).json({ message: 'Tạo đơn hàng thành công', order: newOrder });
+
+            const populated = await Order.findById(newOrder._id)
+                .populate('customer', 'name phone type')
+                .populate('items.product', 'name price unit code');
+
+            res.status(201).json({ message: 'Tao don hang thanh cong', order: populated });
         } catch (error) {
             res.status(500).json({ message: error.message });
         }
@@ -77,8 +72,12 @@ const orderController = {
     // Get all orders
     getAllOrders: async (req, res) => {
         try {
-            const orders = await Order.find().populate('User', 'name phone location').populate('items.product', 'name price unit').select('-__v');
-            res.status(200).json({ orders });
+            const orders = await Order.find()
+                .populate('customer', 'name phone type')
+                .populate('items.product', 'name price unit code')
+                .sort({ createdAt: -1 })
+                .select('-__v');
+            res.status(200).json(orders);
         } catch (error) {
             res.status(500).json({ message: error.message });
         }
@@ -88,90 +87,91 @@ const orderController = {
     getOrderById: async (req, res) => {
         try {
             const order = await Order.findById(req.params.id)
-                .populate('User', 'name phone location')
-                .populate('items.product', 'name price unit')
+                .populate('customer', 'name phone type address')
+                .populate('items.product', 'name price unit code')
                 .select('-__v');
 
             if (!order) {
-                return res.status(404).json({ message: 'Không tìm thấy đơn hàng' });
+                return res.status(404).json({ message: 'Khong tim thay don hang' });
             }
 
-            res.status(200).json({ order });
+            res.status(200).json(order);
         } catch (error) {
             res.status(500).json({ message: error.message });
         }
     },
 
-    getOrderByUser: async (req, res) => {
+    // Get orders by customer
+    getOrdersByCustomer: async (req, res) => {
         try {
-            const userId = req.user.id;
-            const orders = await Order.find({User: userId})
-                .populate('User', 'name phone location')
-                .populate('items.product', 'name price unit')
+            const orders = await Order.find({ customer: req.params.customerId })
+                .populate('customer', 'name phone type')
+                .populate('items.product', 'name price unit code')
+                .sort({ createdAt: -1 })
                 .select('-__v');
-
-            res.status(200).json({ orders });
+            res.status(200).json(orders);
         } catch (error) {
-            res.status(500).json({message: error.message});
+            res.status(500).json({ message: error.message });
         }
     },
 
-    // Update order
-    updateOrder: async (req, res) => {
+    // Add payment to order
+    addPayment: async (req, res) => {
         try {
-            const {amount, method, note } = req.body;
+            const { amount, method, note } = req.body;
             const order = await Order.findById(req.params.id);
             if (!order) {
-                return res.status(404).json({ message: 'Không tìm thấy đơn hàng' });
+                return res.status(404).json({ message: 'Khong tim thay don hang' });
             }
 
-            if (order.isFullyPaid) {
-                return res.status(400).json({ message: 'Đơn hàng đã được thanh toán đầy đủ' });
+            if (order.paidAmount >= order.totalAmount) {
+                return res.status(400).json({ message: 'Don hang da duoc thanh toan day du' });
             }
 
-            if (amount <= 0) {
-                return res.status(400).json({ message: 'Số tiền thanh toán phải lớn hơn 0' });
+            if (!amount || amount <= 0) {
+                return res.status(400).json({ message: 'So tien thanh toan phai lon hon 0' });
             }
 
             if (order.paidAmount + amount > order.totalAmount) {
-                return res.status(400).json({ message: 'Số tiền thanh toán không được vượt quá tổng tiền đơn hàng' });
+                return res.status(400).json({ message: 'So tien thanh toan khong duoc vuot qua tong tien don hang' });
             }
 
             order.paidAmount += amount;
             order.paymentHistory.push({
                 amount,
-                method: method || 'Tiền mặt',
-                note: note || 'Cập nhật thanh toán'
+                method: method || 'Tien mat',
+                note: note || 'Cap nhat thanh toan'
             });
 
             await order.save();
-            res.status(200).json({ message: 'Cập nhật đơn hàng thành công', order });
+            res.status(200).json({ message: 'Cap nhat thanh toan thanh cong', order });
         } catch (error) {
             res.status(500).json({ message: error.message });
         }
     },
 
-    //MarkPaidOrder
+    // Mark order as fully paid
     markPaidOrder: async (req, res) => {
         try {
             const order = await Order.findById(req.params.id);
             if (!order) {
-                return res.status(404).json({ message: 'Không tìm thấy đơn hàng' });
+                return res.status(404).json({ message: 'Khong tim thay don hang' });
             }
 
-            if (order.isFullyPaid) {
-                return res.status(400).json({ message: 'Đơn hàng đã được thanh toán đầy đủ' });
+            if (order.paidAmount >= order.totalAmount) {
+                return res.status(400).json({ message: 'Don hang da duoc thanh toan day du' });
             }
 
+            const remaining = order.totalAmount - order.paidAmount;
             order.paidAmount = order.totalAmount;
             order.paymentHistory.push({
-                amount: order.totalAmount,
-                method: 'Tiền mặt',
-                note: 'Thanh toán đầy đủ'
+                amount: remaining,
+                method: 'Tien mat',
+                note: 'Thanh toan day du'
             });
 
             await order.save();
-            res.status(200).json({ message: 'Đơn hàng đã được đánh dấu là đã thanh toán', order });
+            res.status(200).json({ message: 'Don hang da duoc danh dau la da thanh toan', order });
         } catch (error) {
             res.status(500).json({ message: error.message });
         }
@@ -182,9 +182,9 @@ const orderController = {
         try {
             const order = await Order.findByIdAndDelete(req.params.id);
             if (!order) {
-                return res.status(404).json({ message: 'Không tìm thấy đơn hàng' });
+                return res.status(404).json({ message: 'Khong tim thay don hang' });
             }
-            res.status(200).json({ message: 'Xóa đơn hàng thành công' });
+            res.status(200).json({ message: 'Xoa don hang thanh cong' });
         } catch (error) {
             res.status(500).json({ message: error.message });
         }
