@@ -55,3 +55,5 @@ frontend/build/
 # PM2 logs (nếu dùng pm2 để quản lý process)
 pids/
 *.log
+
+/.claude

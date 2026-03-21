@@ -2,6 +2,9 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import customerService from "../../services/customerService";
 import CustomerForm from "../../components/CustomerForm";
+import Pagination from "../../components/Pagination";
+
+const PAGE_SIZE = 20;
 
 const typeLabels = {
   le: "Khách lẻ",
@@ -17,6 +20,7 @@ const CustomerManagement = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [error, setError] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const fetchCustomers = async () => {
     try {
@@ -44,6 +48,14 @@ const CustomerManagement = () => {
       return matchSearch && matchType;
     });
   }, [customers, search, typeFilter]);
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginated = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filtered.slice(start, start + PAGE_SIZE);
+  }, [filtered, currentPage]);
+
+  useMemo(() => { setCurrentPage(1); }, [search, typeFilter]);
 
   const handleDelete = async (id) => {
     if (!window.confirm("Bạn có chắc muốn xóa khách hàng này?")) return;
@@ -109,14 +121,12 @@ const CustomerManagement = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-800">Quản lý khách hàng</h2>
-        <button
-          onClick={handleAdd}
-          className="inline-flex items-center gap-1.5 bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-colors duration-200 text-sm font-medium shadow-sm"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
+        <p className="text-sm text-gray-500">
+          <span className="font-semibold text-gray-700">{filtered.length}</span> / {customers.length} khách hàng
+          {filtered.length !== customers.length && <span className="text-blue-600"> (đang lọc)</span>}
+        </p>
+        <button onClick={handleAdd} className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
           Thêm khách hàng
         </button>
       </div>
@@ -171,11 +181,6 @@ const CustomerManagement = () => {
         </select>
       </div>
 
-      {/* Customer count */}
-      <p className="text-sm text-gray-500">
-        Hiển thị <span className="font-semibold text-gray-700">{filtered.length}</span> / {customers.length} khách hàng
-      </p>
-
       {/* Customer table */}
       <div className="overflow-x-auto bg-white rounded-xl shadow-sm border border-gray-200">
         <table className="w-full text-sm">
@@ -203,7 +208,7 @@ const CustomerManagement = () => {
                 </td>
               </tr>
             ) : (
-              filtered.map((customer) => (
+              paginated.map((customer) => (
                 <tr key={customer._id} className="hover:bg-gray-50/50 transition-colors">
                   <td className="px-4 py-3.5 font-medium text-gray-900">{customer.name}</td>
                   <td className="px-4 py-3.5 text-gray-500 font-mono text-xs">{customer.phone || "-"}</td>
@@ -250,6 +255,14 @@ const CustomerManagement = () => {
           </tbody>
         </table>
       </div>
+
+      <Pagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={setCurrentPage}
+        totalItems={filtered.length}
+        pageSize={PAGE_SIZE}
+      />
 
       {showForm && (
         <CustomerForm

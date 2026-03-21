@@ -1,6 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
 import productService from "../../services/productService";
 import ProductForm from "../../components/ProductForm";
+import Pagination from "../../components/Pagination";
+
+const PAGE_SIZE = 20;
 
 const ProductManagement = () => {
   const [products, setProducts] = useState([]);
@@ -10,6 +13,7 @@ const ProductManagement = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [error, setError] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const fetchProducts = async () => {
     try {
@@ -42,6 +46,15 @@ const ProductManagement = () => {
       return matchSearch && matchCategory;
     });
   }, [products, search, categoryFilter]);
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginated = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filtered.slice(start, start + PAGE_SIZE);
+  }, [filtered, currentPage]);
+
+  // Reset về trang 1 khi filter thay đổi
+  useMemo(() => { setCurrentPage(1); }, [search, categoryFilter]);
 
   const handleDelete = async (id) => {
     if (!window.confirm("Bạn có chắc muốn xóa sản phẩm này?")) return;
@@ -107,14 +120,12 @@ const ProductManagement = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-800">Quản lý sản phẩm</h2>
-        <button
-          onClick={handleAdd}
-          className="inline-flex items-center gap-1.5 bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-colors duration-200 text-sm font-medium shadow-sm"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
+        <p className="text-sm text-gray-500">
+          <span className="font-semibold text-gray-700">{filtered.length}</span> / {products.length} sản phẩm
+          {filtered.length !== products.length && <span className="text-blue-600"> (đang lọc)</span>}
+        </p>
+        <button onClick={handleAdd} className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
           Thêm sản phẩm
         </button>
       </div>
@@ -172,11 +183,6 @@ const ProductManagement = () => {
         </select>
       </div>
 
-      {/* Product count */}
-      <p className="text-sm text-gray-500">
-        Hiển thị <span className="font-semibold text-gray-700">{filtered.length}</span> / {products.length} sản phẩm
-      </p>
-
       {/* Product table */}
       <div className="overflow-x-auto bg-white rounded-xl shadow-sm border border-gray-200">
         <table className="w-full text-sm">
@@ -207,7 +213,7 @@ const ProductManagement = () => {
                 </td>
               </tr>
             ) : (
-              filtered.map((product) => (
+              paginated.map((product) => (
                 <tr
                   key={product._id}
                   className="hover:bg-gray-50/50 transition-colors"
@@ -256,6 +262,14 @@ const ProductManagement = () => {
           </tbody>
         </table>
       </div>
+
+      <Pagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={setCurrentPage}
+        totalItems={filtered.length}
+        pageSize={PAGE_SIZE}
+      />
 
       {/* Product Form Modal */}
       {showForm && (

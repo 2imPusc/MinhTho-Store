@@ -2,7 +2,6 @@ import './App.css'
 import './index.css';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
-import Dashboard from './pages/Dashboard';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -22,16 +21,16 @@ function App() {
     <BrowserRouter>
       <Header />
       <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
-        <Route path="/register" element={user ? <Navigate to="/" replace /> : <RegisterPage />} />
+        <Route path="/" element={isAdmin ? <Navigate to="/admin/products" replace /> : <HomePage />} />
+        <Route path="/login" element={user ? <Navigate to={isAdmin ? "/admin/products" : "/"} replace /> : <LoginPage />} />
+        <Route path="/register" element={user ? <Navigate to={isAdmin ? "/admin/products" : "/"} replace /> : <RegisterPage />} />
 
         {/* Admin routes */}
         <Route
           path="/admin"
           element={isAdmin ? <AdminLayout /> : <Navigate to="/login" replace />}
         >
-          <Route path="dashboard" element={<Dashboard />} />
+          <Route index element={<Navigate to="/admin/products" replace />} />
           <Route path="products" element={<ProductManagement />} />
           <Route path="customers" element={<CustomerManagement />} />
           <Route path="customers/:customerId/debt" element={<CustomerDebt />} />

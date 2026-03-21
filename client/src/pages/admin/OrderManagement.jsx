@@ -1,6 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import orderService from "../../services/orderService";
+import Pagination from "../../components/Pagination";
+
+const PAGE_SIZE = 20;
 
 const OrderManagement = () => {
   const navigate = useNavigate();
@@ -9,6 +12,7 @@ const OrderManagement = () => {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [error, setError] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const fetchOrders = async () => {
     try {
@@ -39,6 +43,14 @@ const OrderManagement = () => {
       return matchSearch && matchStatus;
     });
   }, [orders, search, statusFilter]);
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginated = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filtered.slice(start, start + PAGE_SIZE);
+  }, [filtered, currentPage]);
+
+  useMemo(() => { setCurrentPage(1); }, [search, statusFilter]);
 
   const handleDelete = async (id) => {
     if (!window.confirm("Bạn có chắc muốn xóa đơn hàng này?")) return;
@@ -71,12 +83,13 @@ const OrderManagement = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-800">Quản lý đơn hàng</h2>
-        <button
-          onClick={() => navigate("/admin/orders/create")}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-        >
-          + Tạo đơn hàng
+        <p className="text-sm text-gray-500">
+          <span className="font-semibold text-gray-700">{filtered.length}</span> / {orders.length} đơn hàng
+          {filtered.length !== orders.length && <span className="text-blue-600"> (đang lọc)</span>}
+        </p>
+        <button onClick={() => navigate("/admin/orders/create")} className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+          Tạo đơn hàng
         </button>
       </div>
 
@@ -127,11 +140,6 @@ const OrderManagement = () => {
           <option value="unpaid">Còn nợ</option>
         </select>
       </div>
-
-      {/* Count */}
-      <p className="text-sm text-gray-500">
-        Hiển thị <span className="font-medium text-gray-700">{filtered.length}</span> / {orders.length} đơn hàng
-      </p>
 
       {/* Table */}
       <div className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-200">
@@ -188,7 +196,7 @@ const OrderManagement = () => {
                   </td>
                 </tr>
               ) : (
-                filtered.map((order) => {
+                paginated.map((order) => {
                   const isPaid = order.paidAmount >= order.totalAmount;
                   const remaining = order.totalAmount - order.paidAmount;
                   return (
@@ -254,6 +262,14 @@ const OrderManagement = () => {
           </table>
         </div>
       </div>
+
+      <Pagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={setCurrentPage}
+        totalItems={filtered.length}
+        pageSize={PAGE_SIZE}
+      />
     </div>
   );
 };
