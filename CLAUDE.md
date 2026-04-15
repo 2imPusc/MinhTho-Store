@@ -42,14 +42,14 @@ server/
 
 Base URL: `/api`
 
-| Route | Mô tả |
-|-------|-------|
-| `/api/auth` | Đăng ký, đăng nhập, đăng xuất, refresh token |
-| `/api/products` | CRUD sản phẩm (GET public, CUD yêu cầu admin) |
-| `/api/customers` | Quản lý khách hàng |
-| `/api/orders` | Quản lý đơn hàng |
-| `/api/payments` | Xử lý thanh toán |
-| `/api/supplier` | Quản lý nhà cung cấp |
+| Route            | Mô tả                                         |
+| ---------------- | --------------------------------------------- |
+| `/api/auth`      | Đăng ký, đăng nhập, đăng xuất, refresh token  |
+| `/api/products`  | CRUD sản phẩm (GET public, CUD yêu cầu admin) |
+| `/api/customers` | Quản lý khách hàng                            |
+| `/api/orders`    | Quản lý đơn hàng                              |
+| `/api/payments`  | Xử lý thanh toán                              |
+| `/api/supplier`  | Quản lý nhà cung cấp                          |
 
 Swagger UI có sẵn khi chạy backend.
 
@@ -65,12 +65,31 @@ Swagger UI có sẵn khi chạy backend.
 ## Biến môi trường
 
 File `server/.env` cần có:
+
 ```
 MONGO_URI=...
 JWT_SECRET=...
 JWT_REFRESH_SECRET=...
 PORT=5000
 ```
+
+## Tài liệu dự án (đọc trước khi làm task)
+
+- **`plan.md`** — kế hoạch phát triển theo phase, danh sách bug cần fix, backlog. Cập nhật khi hoàn thành task hoặc đổi ưu tiên.
+- **`memory.md`** — ghi chú quyết định kiến trúc, workflow, pitfall, quy ước code. **Đọc file này trước khi bắt đầu task để có ngữ cảnh.**
+
+## Khi nào cần cập nhật `memory.md`
+
+Cập nhật ngay khi có các thay đổi sau (tránh để người/AI sau mất ngữ cảnh):
+
+- Thêm/đổi/xóa model Mongoose hoặc field quan trọng
+- Thêm route/endpoint mới hoặc đổi contract API
+- Đổi workflow chạy dev/build/deploy hoặc biến môi trường bắt buộc
+- Ra quyết định kiến trúc (thư viện mới, pattern, cấu trúc thư mục)
+- Phát hiện pitfall / bug non-obvious mà người khác dễ đạp lại
+- Đổi quy ước code, commit message, branch strategy
+
+Không ghi vào `memory.md` những thứ đã có trong `CLAUDE.md`, TODO ngắn hạn (dùng `plan.md`), hoặc thay đổi nhỏ thấy được qua `git log`.
 
 ## Lưu ý khi phát triển
 

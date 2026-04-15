@@ -1,63 +1,65 @@
 const Customer = require('../models/Customer');
+const AppError = require('../utils/AppError');
+const asyncHandler = require('../utils/asyncHandler');
+const { paginate, buildSearchFilter } = require('../utils/paginate');
 
 const customerController = {
-  createCustomer: async (req, res) => {
-    try {
-      const { name, phone, address, type, note } = req.body;
-      const newCustomer = new Customer({ name, phone, address, type, note });
-      await newCustomer.save();
-      res.status(201).json(newCustomer);
-    } catch (err) {
-      return res.status(500).json({ message: err.message });
+  createCustomer: asyncHandler(async (req, res) => {
+    const { name, phone, address, type, note } = req.body;
+    const newCustomer = new Customer({ name, phone, address, type, note });
+    await newCustomer.save();
+    res.status(201).json(newCustomer);
+  }),
+
+  getAllCustomers: asyncHandler(async (req, res) => {
+    const { page, limit, search, type } = req.query;
+    const filter = {
+      ...buildSearchFilter(search, ['name', 'phone', 'address']),
+      ...(type ? { type } : {})
+    };
+    if (page !== undefined || limit !== undefined) {
+      const result = await paginate(Customer, { filter, page, limit });
+      return res.status(200).json(result);
     }
-  },
+    const customers = await Customer.find(filter).sort({ createdAt: -1 });
+    res.status(200).json(customers);
+  }),
 
-  getAllCustomers: async (req, res) => {
-    try {
-      const customers = await Customer.find().sort({ createdAt: -1 });
-      res.status(200).json(customers);
-    } catch (err) {
-      return res.status(500).json({ message: err.message });
+  getCustomerById: asyncHandler(async (req, res) => {
+    const customer = await Customer.findById(req.params.id);
+    if (!customer) throw new AppError('Không tìm thấy khách hàng', 404);
+    res.status(200).json(customer);
+  }),
+
+  updateCustomer: asyncHandler(async (req, res) => {
+    const { name, phone, address, type, note } = req.body;
+    const customer = await Customer.findById(req.params.id);
+    if (!customer) throw new AppError('Không tìm thấy khách hàng', 404);
+
+    if (name !== undefined) customer.name = name;
+    if (phone !== undefined) customer.phone = phone;
+    if (address !== undefined) customer.address = address;
+    if (type !== undefined) customer.type = type;
+    if (note !== undefined) customer.note = note;
+
+    await customer.save();
+    res.status(200).json({ message: 'Cập nhật khách hàng thành công', customer });
+  }),
+
+  deleteCustomer: asyncHandler(async (req, res) => {
+    const deleted = await Customer.findByIdAndDelete(req.params.id);
+    if (!deleted) throw new AppError('Không tìm thấy khách hàng', 404);
+    res.status(200).json({ message: 'Xóa khách hàng thành công' });
+  }),
+
+  bulkDelete: asyncHandler(async (req, res) => {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      throw new AppError('Danh sách ID không hợp lệ', 400);
     }
-  },
-
-  getCustomerById: async (req, res) => {
-    try {
-      const customer = await Customer.findById(req.params.id);
-      if (!customer) return res.status(404).json({ message: 'Khong tim thay khach hang' });
-      res.status(200).json(customer);
-    } catch (err) {
-      return res.status(500).json({ message: err.message });
-    }
-  },
-
-  updateCustomer: async (req, res) => {
-    try {
-      const { name, phone, address, type, note } = req.body;
-      const customer = await Customer.findById(req.params.id);
-      if (!customer) return res.status(404).json({ message: 'Khong tim thay khach hang' });
-
-      if (name !== undefined) customer.name = name;
-      if (phone !== undefined) customer.phone = phone;
-      if (address !== undefined) customer.address = address;
-      if (type !== undefined) customer.type = type;
-      if (note !== undefined) customer.note = note;
-
-      await customer.save();
-      res.status(200).json({ message: 'Cap nhat khach hang thanh cong', customer });
-    } catch (err) {
-      return res.status(500).json({ message: err.message });
-    }
-  },
-
-  deleteCustomer: async (req, res) => {
-    try {
-      await Customer.findByIdAndDelete(req.params.id);
-      res.status(200).json({ message: 'Xoa khach hang thanh cong' });
-    } catch (err) {
-      return res.status(500).json({ message: err.message });
-    }
-  }
+    const result = await Customer.deleteMany({ _id: { $in: ids } });
+    res.status(200).json({ message: `Đã xóa ${result.deletedCount} khách hàng`, deletedCount: result.deletedCount });
+  })
 };
 
 module.exports = customerController;

@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import orderService from "../../services/orderService";
 import Pagination from "../../components/Pagination";
+import InvoicePrint from "../../components/InvoicePrint";
+import { exportOrders } from "../../utils/exportExcel";
 
 const PAGE_SIZE = 20;
 
@@ -11,8 +13,13 @@ const OrderManagement = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [error, setError] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [printOrder, setPrintOrder] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const fetchOrders = async () => {
     try {
@@ -31,6 +38,8 @@ const OrderManagement = () => {
   }, []);
 
   const filtered = useMemo(() => {
+    const fromTs = fromDate ? new Date(fromDate).setHours(0, 0, 0, 0) : null;
+    const toTs = toDate ? new Date(toDate).setHours(23, 59, 59, 999) : null;
     return orders.filter((o) => {
       const customerName = o.customer?.name || "";
       const matchSearch =
@@ -40,9 +49,12 @@ const OrderManagement = () => {
         !statusFilter ||
         (statusFilter === "paid" && isPaid) ||
         (statusFilter === "unpaid" && !isPaid);
-      return matchSearch && matchStatus;
+      const ts = new Date(o.createdAt).getTime();
+      const matchFrom = fromTs === null || ts >= fromTs;
+      const matchTo = toTs === null || ts <= toTs;
+      return matchSearch && matchStatus && matchFrom && matchTo;
     });
-  }, [orders, search, statusFilter]);
+  }, [orders, search, statusFilter, fromDate, toDate]);
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginated = useMemo(() => {
@@ -50,7 +62,7 @@ const OrderManagement = () => {
     return filtered.slice(start, start + PAGE_SIZE);
   }, [filtered, currentPage]);
 
-  useMemo(() => { setCurrentPage(1); }, [search, statusFilter]);
+  useMemo(() => { setCurrentPage(1); }, [search, statusFilter, fromDate, toDate]);
 
   const handleDelete = async (id) => {
     if (!window.confirm("Bạn có chắc muốn xóa đơn hàng này?")) return;
@@ -59,6 +71,60 @@ const OrderManagement = () => {
       setOrders((prev) => prev.filter((o) => o._id !== id));
     } catch (err) {
       setError("Xóa đơn hàng thất bại");
+    }
+  };
+
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const pageIds = paginated.map((o) => o._id);
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+
+  const toggleSelectPage = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allPageSelected) pageIds.forEach((id) => next.delete(id));
+      else pageIds.forEach((id) => next.add(id));
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    if (!window.confirm(`Xóa ${ids.length} đơn hàng đã chọn? Tồn kho sẽ được hoàn trả.`)) return;
+    setBulkBusy(true);
+    try {
+      await orderService.bulkDelete(ids);
+      clearSelection();
+      fetchOrders();
+    } catch (err) {
+      setError(err.response?.data?.message || "Xóa hàng loạt thất bại");
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const handleBulkMarkPaid = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    if (!window.confirm(`Đánh dấu ${ids.length} đơn đã thanh toán đầy đủ?`)) return;
+    setBulkBusy(true);
+    try {
+      await orderService.bulkMarkPaid(ids);
+      clearSelection();
+      fetchOrders();
+    } catch (err) {
+      setError(err.response?.data?.message || "Thao tác hàng loạt thất bại");
+    } finally {
+      setBulkBusy(false);
     }
   };
 
@@ -87,10 +153,22 @@ const OrderManagement = () => {
           <span className="font-semibold text-gray-700">{filtered.length}</span> / {orders.length} đơn hàng
           {filtered.length !== orders.length && <span className="text-blue-600"> (đang lọc)</span>}
         </p>
-        <button onClick={() => navigate("/admin/orders/create")} className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-          Tạo đơn hàng
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => exportOrders(filtered)}
+            disabled={filtered.length === 0}
+            className="inline-flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors text-sm font-medium shadow-sm"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+            </svg>
+            Xuất Excel
+          </button>
+          <button onClick={() => navigate("/admin/orders/create")} className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+            Tạo đơn hàng
+          </button>
+        </div>
       </div>
 
       {/* Error */}
@@ -139,7 +217,61 @@ const OrderManagement = () => {
           <option value="paid">Đã thanh toán</option>
           <option value="unpaid">Còn nợ</option>
         </select>
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            className="rounded-lg border border-gray-300 px-3 py-2.5 text-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            title="Từ ngày"
+          />
+          <span className="text-gray-400 text-sm">→</span>
+          <input
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            className="rounded-lg border border-gray-300 px-3 py-2.5 text-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            title="Đến ngày"
+          />
+          {(fromDate || toDate) && (
+            <button
+              onClick={() => { setFromDate(""); setToDate(""); }}
+              className="text-xs text-gray-500 hover:text-red-600 px-2"
+              title="Xóa bộ lọc ngày"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+          <span className="text-sm font-semibold text-blue-800">Đã chọn {selectedIds.size} đơn</span>
+          <button
+            onClick={handleBulkMarkPaid}
+            disabled={bulkBusy}
+            className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+          >
+            Đánh dấu đã trả
+          </button>
+          <button
+            onClick={handleBulkDelete}
+            disabled={bulkBusy}
+            className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+          >
+            Xóa đã chọn
+          </button>
+          <button
+            onClick={clearSelection}
+            disabled={bulkBusy}
+            className="ml-auto text-xs font-medium text-gray-600 hover:text-gray-800"
+          >
+            Bỏ chọn
+          </button>
+        </div>
+      )}
 
       {/* Table */}
       <div className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-200">
@@ -147,6 +279,14 @@ const OrderManagement = () => {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50">
+                <th className="px-4 py-3 text-center w-10">
+                  <input
+                    type="checkbox"
+                    checked={allPageSelected}
+                    onChange={toggleSelectPage}
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                </th>
                 <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">
                   Khách hàng
                 </th>
@@ -176,7 +316,7 @@ const OrderManagement = () => {
             <tbody className="divide-y divide-gray-100">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="px-5 py-16 text-center">
+                  <td colSpan="9" className="px-5 py-16 text-center">
                     <div className="flex flex-col items-center gap-2">
                       <svg
                         className="h-10 w-10 text-gray-300"
@@ -200,7 +340,15 @@ const OrderManagement = () => {
                   const isPaid = order.paidAmount >= order.totalAmount;
                   const remaining = order.totalAmount - order.paidAmount;
                   return (
-                    <tr key={order._id} className="transition hover:bg-gray-50/70">
+                    <tr key={order._id} className={`transition hover:bg-gray-50/70 ${selectedIds.has(order._id) ? "bg-blue-50/50" : ""}`}>
+                      <td className="px-4 py-3.5 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(order._id)}
+                          onChange={() => toggleSelect(order._id)}
+                          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                      </td>
                       <td className="px-5 py-3.5 font-medium text-gray-900">
                         {order.customer?.name || "Khách vãng lai"}
                       </td>
@@ -247,6 +395,12 @@ const OrderManagement = () => {
                             </button>
                           )}
                           <button
+                            onClick={() => setPrintOrder(order)}
+                            className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
+                          >
+                            In
+                          </button>
+                          <button
                             onClick={() => handleDelete(order._id)}
                             className="text-xs font-medium text-red-500 transition hover:text-red-700 hover:underline"
                           >
@@ -270,6 +424,10 @@ const OrderManagement = () => {
         totalItems={filtered.length}
         pageSize={PAGE_SIZE}
       />
+
+      {printOrder && (
+        <InvoicePrint order={printOrder} onClose={() => setPrintOrder(null)} />
+      )}
     </div>
   );
 };

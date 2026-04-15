@@ -1,0 +1,11 @@
+{
+  "name": "minhtho-store",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n BE,FE -c blue,green \"npm --prefix server start\" \"npm --prefix client run dev\"",
+    "install:all": "npm --prefix server install && npm --prefix client install"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}

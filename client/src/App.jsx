@@ -12,6 +12,8 @@ import CustomerManagement from './pages/admin/CustomerManagement';
 import OrderManagement from './pages/admin/OrderManagement';
 import OrderCreate from './pages/admin/OrderCreate';
 import CustomerDebt from './pages/admin/CustomerDebt';
+import SupplierManagement from './pages/admin/SupplierManagement';
+import PaymentManagement from './pages/admin/PaymentManagement';
 
 function App() {
   const { user } = useAuth();
@@ -36,6 +38,8 @@ function App() {
           <Route path="customers/:customerId/debt" element={<CustomerDebt />} />
           <Route path="orders" element={<OrderManagement />} />
           <Route path="orders/create" element={<OrderCreate />} />
+          <Route path="suppliers" element={<SupplierManagement />} />
+          <Route path="payments" element={<PaymentManagement />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

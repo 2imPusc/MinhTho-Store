@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import paymentService from "../../services/paymentService";
 
@@ -16,6 +16,10 @@ const CustomerDebt = () => {
   const [payMethod, setPayMethod] = useState("Tien mat");
   const [payNote, setPayNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // Date range filter
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
 
   const fetchDebt = async () => {
     try {
@@ -91,7 +95,40 @@ const CustomerDebt = () => {
       </div>
     );
 
-  const { customer, totalOrdered, totalPaid, totalDebt, orders, generalPayments } = data;
+  const { customer, totalOrdered: totalOrderedAll, totalPaid: totalPaidAll, totalDebt: totalDebtAll, orders: allOrders, generalPayments: allGeneralPayments } = data;
+
+  const isDateFiltered = fromDate || toDate;
+
+  const { orders, generalPayments, totalOrdered, totalPaid, totalDebt } = useMemo(() => {
+    if (!isDateFiltered) {
+      return {
+        orders: allOrders,
+        generalPayments: allGeneralPayments,
+        totalOrdered: totalOrderedAll,
+        totalPaid: totalPaidAll,
+        totalDebt: totalDebtAll,
+      };
+    }
+    const fromTs = fromDate ? new Date(fromDate).setHours(0, 0, 0, 0) : null;
+    const toTs = toDate ? new Date(toDate).setHours(23, 59, 59, 999) : null;
+    const inRange = (d) => {
+      const ts = new Date(d).getTime();
+      return (fromTs === null || ts >= fromTs) && (toTs === null || ts <= toTs);
+    };
+    const fOrders = allOrders.filter((o) => inRange(o.createdAt));
+    const fGeneral = allGeneralPayments.filter((p) => inRange(p.createdAt));
+    const tOrdered = fOrders.reduce((s, o) => s + o.totalAmount, 0);
+    const tPaidOrders = fOrders.reduce((s, o) => s + o.paidAmount, 0);
+    const tGeneral = fGeneral.reduce((s, p) => s + p.amount, 0);
+    const tPaid = tPaidOrders + tGeneral;
+    return {
+      orders: fOrders,
+      generalPayments: fGeneral,
+      totalOrdered: tOrdered,
+      totalPaid: tPaid,
+      totalDebt: tOrdered - tPaid,
+    };
+  }, [allOrders, allGeneralPayments, totalOrderedAll, totalPaidAll, totalDebtAll, fromDate, toDate, isDateFiltered]);
 
   return (
     <div className="space-y-6">
@@ -152,6 +189,39 @@ const CustomerDebt = () => {
           </button>
         </div>
       )}
+
+      {/* Date range filter */}
+      <div className="flex flex-wrap items-center gap-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-200">
+        <span className="text-sm font-medium text-gray-700">Lọc theo ngày:</span>
+        <input
+          type="date"
+          value={fromDate}
+          onChange={(e) => setFromDate(e.target.value)}
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          title="Từ ngày"
+        />
+        <span className="text-gray-400 text-sm">→</span>
+        <input
+          type="date"
+          value={toDate}
+          onChange={(e) => setToDate(e.target.value)}
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          title="Đến ngày"
+        />
+        {isDateFiltered && (
+          <>
+            <button
+              onClick={() => { setFromDate(""); setToDate(""); }}
+              className="text-xs text-gray-500 hover:text-red-600 px-2"
+            >
+              ✕ Xóa lọc
+            </button>
+            <span className="ml-auto text-xs text-blue-600 italic">
+              Đang lọc — thống kê tính trên khoảng đã chọn
+            </span>
+          </>
+        )}
+      </div>
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

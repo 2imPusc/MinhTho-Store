@@ -9,6 +9,7 @@ router.get('/', middleWareController.verifyAdmin, customerController.getAllCusto
 router.get('/:id', middleWareController.verifyAdmin, customerController.getCustomerById);
 router.post('/', middleWareController.verifyAdmin, validateCustomerCreate, customerController.createCustomer);
 router.put('/:id', middleWareController.verifyAdmin, validateCustomerUpdate, customerController.updateCustomer);
+router.post('/bulk-delete', middleWareController.verifyAdmin, customerController.bulkDelete);
 router.delete('/:id', middleWareController.verifyAdmin, customerController.deleteCustomer);
 
 module.exports = router;

@@ -4,6 +4,7 @@ const paymentController = require('../controllers/paymentController');
 const middleWareController = require('../middlewares/middleWareController');
 
 // All payment routes require admin
+router.get('/', middleWareController.verifyAdmin, paymentController.getAllPayments);
 router.get('/debts', middleWareController.verifyAdmin, paymentController.getAllDebts);
 router.get('/customer/:customerId', middleWareController.verifyAdmin, paymentController.getPaymentsByCustomer);
 router.get('/customer/:customerId/debt', middleWareController.verifyAdmin, paymentController.getCustomerDebt);

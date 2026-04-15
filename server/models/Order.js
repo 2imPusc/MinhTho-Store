@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const orderSchema = new mongoose.Schema({
+    clientId: {type: String, index: {unique: true, sparse: true}}, // dedup khi sync offline
     customer: {type: mongoose.Schema.Types.ObjectId, ref: 'Customer'},
     items: [
         {

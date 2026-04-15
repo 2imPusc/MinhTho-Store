@@ -11,6 +11,8 @@ const emptyForm = {
   location: "",
   category: "",
   description: "",
+  stockQty: "",
+  lowStockThreshold: "",
   supplierId: "",
 };
 
@@ -18,6 +20,7 @@ const ProductForm = ({ product, onClose, onSuccess }) => {
   const [form, setForm] = useState(emptyForm);
   const [errors, setErrors] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const isEdit = Boolean(product);
 
@@ -33,6 +36,8 @@ const ProductForm = ({ product, onClose, onSuccess }) => {
         location: product.location || "",
         category: product.category || "",
         description: product.description || "",
+        stockQty: product.stockQty ?? "",
+        lowStockThreshold: product.lowStockThreshold ?? "",
         supplierId: product.supplier?._id || "",
       });
     }
@@ -41,6 +46,20 @@ const ProductForm = ({ product, onClose, onSuccess }) => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const res = await productService.uploadImage(file);
+      setForm((prev) => ({ ...prev, imageUrl: res.data.url }));
+    } catch (err) {
+      setErrors([err.response?.data?.message || "Upload thất bại"]);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -54,6 +73,11 @@ const ProductForm = ({ product, onClose, onSuccess }) => {
         price: Number(form.price),
         importPrice: Number(form.importPrice),
       };
+
+      if (form.stockQty === "" || form.stockQty === null) delete payload.stockQty;
+      else payload.stockQty = Number(form.stockQty);
+      if (form.lowStockThreshold === "" || form.lowStockThreshold === null) delete payload.lowStockThreshold;
+      else payload.lowStockThreshold = Number(form.lowStockThreshold);
 
       // Remove empty optional fields
       if (!payload.supplierId) delete payload.supplierId;
@@ -215,18 +239,71 @@ const ProductForm = ({ product, onClose, onSuccess }) => {
               />
             </div>
 
-            {/* URL hình ảnh */}
+            {/* Tồn kho */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                URL hình ảnh
+                Tồn kho
               </label>
               <input
-                name="imageUrl"
-                value={form.imageUrl}
+                name="stockQty"
+                type="number"
+                min="0"
+                value={form.stockQty}
                 onChange={handleChange}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-shadow"
-                placeholder="https://..."
+                placeholder="0"
               />
+            </div>
+
+            {/* Ngưỡng cảnh báo sắp hết */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Ngưỡng cảnh báo
+              </label>
+              <input
+                name="lowStockThreshold"
+                type="number"
+                min="0"
+                value={form.lowStockThreshold}
+                onChange={handleChange}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-shadow"
+                placeholder="10"
+              />
+            </div>
+
+            {/* Ảnh sản phẩm */}
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Ảnh sản phẩm
+              </label>
+              <div className="flex items-start gap-3">
+                {form.imageUrl && (
+                  <img
+                    src={form.imageUrl}
+                    alt="preview"
+                    className="w-20 h-20 object-cover rounded-lg border border-gray-200"
+                  />
+                )}
+                <div className="flex-1 space-y-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleUpload}
+                    disabled={uploading}
+                    className="block w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  />
+                  <input
+                    name="imageUrl"
+                    value={form.imageUrl}
+                    onChange={handleChange}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs font-mono focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                    placeholder="Hoặc nhập URL..."
+                  />
+                  {uploading && (
+                    <p className="text-xs text-blue-600">Đang upload...</p>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 

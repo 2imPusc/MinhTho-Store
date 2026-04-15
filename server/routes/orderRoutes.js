@@ -10,6 +10,8 @@ router.get('/:id', middleWareController.verifyAdmin, orderController.getOrderByI
 router.post('/', middleWareController.verifyAdmin, orderController.createOrder);
 router.put('/:id/payment', middleWareController.verifyAdmin, orderController.addPayment);
 router.patch('/:id/mark-paid', middleWareController.verifyAdmin, orderController.markPaidOrder);
+router.post('/bulk-delete', middleWareController.verifyAdmin, orderController.bulkDelete);
+router.post('/bulk-mark-paid', middleWareController.verifyAdmin, orderController.bulkMarkPaid);
 router.delete('/:id', middleWareController.verifyAdmin, orderController.deleteOrder);
 
 module.exports = router;

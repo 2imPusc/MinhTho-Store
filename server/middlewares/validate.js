@@ -132,6 +132,14 @@ const validateProduct = (req, res, next) => {
         description: Joi.string().optional().allow('').messages({
             'string.empty': 'Mô tả có thể để trống'
         }),
+        stockQty: Joi.number().integer().min(0).optional().messages({
+            'number.base': 'Số lượng tồn kho phải là số',
+            'number.min': 'Số lượng tồn kho không được âm'
+        }),
+        lowStockThreshold: Joi.number().integer().min(0).optional().messages({
+            'number.base': 'Ngưỡng cảnh báo phải là số',
+            'number.min': 'Ngưỡng cảnh báo không được âm'
+        }),
         supplierId: Joi.string().hex().length(24).optional().messages({
             'string.hex': 'ID nhà cung cấp không hợp lệ',
             'string.length': 'ID nhà cung cấp phải có đúng 24 ký tự'
@@ -221,19 +229,19 @@ const itemSchema = Joi.object({
 
 const validateOrderCreate = (req, res, next) => {
     const schema = Joi.object({
-        user: Joi.alternatives().try(
-            Joi.string().hex().length(24),
-            Joi.object({
-                name: Joi.string().min(2).max(50).required(),
-                phone: Joi.string().pattern(/^[0-9]{10}$/).required(),
-                password: Joi.string().min(6),
-                location: Joi.string().allow('')
-            })
-        ).required(),
-        items: Joi.array().items(itemSchema).min(1).required(),
+        clientId: Joi.string().max(64).optional().allow('', null),
+        customerId: Joi.string().hex().length(24).optional().allow('', null).messages({
+            'string.hex': 'ID khách hàng không hợp lệ',
+            'string.length': 'ID khách hàng phải có 24 ký tự'
+        }),
+        items: Joi.array().items(itemSchema).min(1).required().messages({
+            'array.min': 'Đơn hàng phải có ít nhất 1 sản phẩm',
+            'any.required': 'Danh sách sản phẩm là bắt buộc'
+        }),
         paidAmount: Joi.number().min(0).default(0),
         paymentMethod: Joi.string().allow(''),
-        paymentNote: Joi.string().allow('')
+        paymentNote: Joi.string().allow(''),
+        note: Joi.string().allow('')
     });
 
     const { error } = schema.validate(req.body, { abortEarly: false });

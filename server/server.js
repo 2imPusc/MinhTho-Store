@@ -1,31 +1,6 @@
 require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
 const connectDB = require('./config/db');
-
-const app = express();
-app.use(express.json())
-app.use(cors({
-  origin: '*', // Hoặc domain cụ thể
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-}));
-//Auth
-app.use('/api/auth', require('./routes/authRoutes'));
-
-//Product
-app.use('/api/products', require('./routes/productRoutes'));
-
-//Supplier
-app.use('/api/supplier', require('./routes/supplierRoutes'));
-
-//Customer
-app.use('/api/customers', require('./routes/customerRoutes'));
-
-//Order
-app.use('/api/orders', require('./routes/orderRoutes'));
-
-//Payment
-app.use('/api/payments', require('./routes/paymentRoutes'));
+const app = require('./app');
 
 connectDB();
 

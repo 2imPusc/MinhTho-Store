@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import customerService from "../../services/customerService";
 import CustomerForm from "../../components/CustomerForm";
 import Pagination from "../../components/Pagination";
+import { exportCustomers } from "../../utils/exportExcel";
 
 const PAGE_SIZE = 20;
 
@@ -21,6 +22,8 @@ const CustomerManagement = () => {
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [error, setError] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const fetchCustomers = async () => {
     try {
@@ -56,6 +59,40 @@ const CustomerManagement = () => {
   }, [filtered, currentPage]);
 
   useMemo(() => { setCurrentPage(1); }, [search, typeFilter]);
+
+  const pageIds = paginated.map((c) => c._id);
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectPage = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allPageSelected) pageIds.forEach((id) => next.delete(id));
+      else pageIds.forEach((id) => next.add(id));
+      return next;
+    });
+  };
+  const clearSelection = () => setSelectedIds(new Set());
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    if (!window.confirm(`Xóa ${ids.length} khách hàng đã chọn?`)) return;
+    setBulkBusy(true);
+    try {
+      await customerService.bulkDelete(ids);
+      clearSelection();
+      fetchCustomers();
+    } catch (err) {
+      setError(err.response?.data?.message || "Xóa hàng loạt thất bại");
+    } finally {
+      setBulkBusy(false);
+    }
+  };
 
   const handleDelete = async (id) => {
     if (!window.confirm("Bạn có chắc muốn xóa khách hàng này?")) return;
@@ -125,10 +162,22 @@ const CustomerManagement = () => {
           <span className="font-semibold text-gray-700">{filtered.length}</span> / {customers.length} khách hàng
           {filtered.length !== customers.length && <span className="text-blue-600"> (đang lọc)</span>}
         </p>
-        <button onClick={handleAdd} className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-          Thêm khách hàng
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => exportCustomers(filtered)}
+            disabled={filtered.length === 0}
+            className="inline-flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors text-sm font-medium shadow-sm"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+            </svg>
+            Xuất Excel
+          </button>
+          <button onClick={handleAdd} className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+            Thêm khách hàng
+          </button>
+        </div>
       </div>
 
       {/* Error Banner */}
@@ -181,11 +230,40 @@ const CustomerManagement = () => {
         </select>
       </div>
 
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+          <span className="text-sm font-semibold text-blue-800">Đã chọn {selectedIds.size} khách hàng</span>
+          <button
+            onClick={handleBulkDelete}
+            disabled={bulkBusy}
+            className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+          >
+            Xóa đã chọn
+          </button>
+          <button
+            onClick={clearSelection}
+            disabled={bulkBusy}
+            className="ml-auto text-xs font-medium text-gray-600 hover:text-gray-800"
+          >
+            Bỏ chọn
+          </button>
+        </div>
+      )}
+
       {/* Customer table */}
       <div className="overflow-x-auto bg-white rounded-xl shadow-sm border border-gray-200">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-200">
+              <th className="px-3 py-3.5 text-center w-10">
+                <input
+                  type="checkbox"
+                  checked={allPageSelected}
+                  onChange={toggleSelectPage}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+              </th>
               <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Tên</th>
               <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">SĐT</th>
               <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Địa chỉ</th>
@@ -197,7 +275,7 @@ const CustomerManagement = () => {
           <tbody className="divide-y divide-gray-100">
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan="6" className="px-4 py-16 text-center">
+                <td colSpan="7" className="px-4 py-16 text-center">
                   <div className="flex flex-col items-center gap-2">
                     <svg className="w-12 h-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -209,7 +287,15 @@ const CustomerManagement = () => {
               </tr>
             ) : (
               paginated.map((customer) => (
-                <tr key={customer._id} className="hover:bg-gray-50/50 transition-colors">
+                <tr key={customer._id} className={`hover:bg-gray-50/50 transition-colors ${selectedIds.has(customer._id) ? "bg-blue-50/40" : ""}`}>
+                  <td className="px-3 py-3.5 text-center">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(customer._id)}
+                      onChange={() => toggleSelect(customer._id)}
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                  </td>
                   <td className="px-4 py-3.5 font-medium text-gray-900">{customer.name}</td>
                   <td className="px-4 py-3.5 text-gray-500 font-mono text-xs">{customer.phone || "-"}</td>
                   <td className="px-4 py-3.5 text-gray-500">{customer.address || "-"}</td>

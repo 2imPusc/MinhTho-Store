@@ -10,6 +10,8 @@ const productSchema = new mongoose.Schema({
     location: { type: String },
     category: {type: String},
     description: {type: String},
+    stockQty: {type: Number, default: 0},
+    lowStockThreshold: {type: Number, default: 10},
     supplier: {type: mongoose.Schema.Types.ObjectId, ref: 'Supplier'},
     createdAt: {type: Date, default: Date.now}
 })

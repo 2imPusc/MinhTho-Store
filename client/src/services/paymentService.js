@@ -1,6 +1,7 @@
 import api from "./api";
 
 const paymentService = {
+  getAll: (params) => api.get("/payments", { params }),
   getAllDebts: () => api.get("/payments/debts"),
   getByCustomer: (customerId) => api.get(`/payments/customer/${customerId}`),
   getCustomerDebt: (customerId) => api.get(`/payments/customer/${customerId}/debt`),
