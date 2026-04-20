@@ -1,6 +1,8 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import productService from "../../services/productService";
 import ProductForm from "../../components/ProductForm";
+import ProductDetailModal from "../../components/ProductDetailModal";
+import ConfirmModal from "../../components/ConfirmModal";
 import Pagination from "../../components/Pagination";
 import { exportProducts } from "../../utils/exportExcel";
 
@@ -17,6 +19,18 @@ const ProductManagement = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [detailProduct, setDetailProduct] = useState(null);
+  const [confirm, setConfirm] = useState(null);
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setOpenMenuId(null);
+    };
+    if (openMenuId) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [openMenuId]);
 
   const fetchProducts = async () => {
     try {
@@ -77,29 +91,49 @@ const ProductManagement = () => {
     });
   };
   const clearSelection = () => setSelectedIds(new Set());
-  const handleBulkDelete = async () => {
+
+  const askBulkDelete = () => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
-    if (!window.confirm(`Xóa ${ids.length} sản phẩm đã chọn?`)) return;
-    setBulkBusy(true);
-    try {
-      await productService.bulkDelete(ids);
-      clearSelection();
-      fetchProducts();
-    } catch (err) {
-      setError(err.response?.data?.message || "Xóa hàng loạt thất bại");
-    } finally {
-      setBulkBusy(false);
-    }
+    setConfirm({
+      title: "Xóa hàng loạt",
+      message: `Xóa ${ids.length} sản phẩm đã chọn?`,
+      confirmText: "Xóa tất cả",
+      variant: "danger",
+      action: async () => {
+        await productService.bulkDelete(ids);
+        clearSelection();
+        fetchProducts();
+      },
+      errorMsg: "Xóa hàng loạt thất bại",
+    });
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Bạn có chắc muốn xóa sản phẩm này?")) return;
+  const askDelete = (product) => {
+    setConfirm({
+      title: "Xóa sản phẩm",
+      message: `Xóa sản phẩm "${product.name}" (${product.code})?`,
+      confirmText: "Xóa",
+      variant: "danger",
+      action: async () => {
+        await productService.delete(product._id);
+        setProducts((prev) => prev.filter((p) => p._id !== product._id));
+      },
+      errorMsg: "Xóa sản phẩm thất bại",
+    });
+  };
+
+  const runConfirm = async () => {
+    if (!confirm) return;
+    setBulkBusy(true);
     try {
-      await productService.delete(id);
-      setProducts((prev) => prev.filter((p) => p._id !== id));
+      await confirm.action();
+      setConfirm(null);
     } catch (err) {
-      setError("Xóa sản phẩm thất bại");
+      setError(err.response?.data?.message || confirm.errorMsg || "Thao tác thất bại");
+      setConfirm(null);
+    } finally {
+      setBulkBusy(false);
     }
   };
 
@@ -237,7 +271,7 @@ const ProductManagement = () => {
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
           <span className="text-sm font-semibold text-blue-800">Đã chọn {selectedIds.size} sản phẩm</span>
           <button
-            onClick={handleBulkDelete}
+            onClick={askBulkDelete}
             disabled={bulkBusy}
             className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
           >
@@ -266,10 +300,10 @@ const ProductManagement = () => {
                   className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
               </th>
+              <th className="px-3 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-16">Ảnh</th>
               <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Mã</th>
               <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Tên sản phẩm</th>
               <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Giá bán</th>
-              <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Giá nhập</th>
               <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Đơn vị</th>
               <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Tồn kho</th>
               <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Vị trí</th>
@@ -305,13 +339,34 @@ const ProductManagement = () => {
                       className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                   </td>
+                  <td className="px-3 py-2">
+                    {product.imageUrl ? (
+                      <img
+                        src={product.imageUrl}
+                        alt={product.name}
+                        className="h-10 w-10 cursor-pointer rounded-lg border border-gray-200 object-cover"
+                        onClick={() => setDetailProduct(product)}
+                        onError={(e) => { e.currentTarget.style.display = "none"; }}
+                      />
+                    ) : (
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-gray-300">
+                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                        </svg>
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-3.5 font-mono text-xs text-gray-500">{product.code}</td>
-                  <td className="px-4 py-3.5 font-medium text-gray-900">{product.name}</td>
-                  <td className="px-4 py-3.5 text-gray-700">
-                    {product.price?.toLocaleString("vi-VN")}đ
+                  <td className="px-4 py-3.5">
+                    <button
+                      onClick={() => setDetailProduct(product)}
+                      className="font-medium text-blue-700 hover:text-blue-900 hover:underline text-left"
+                    >
+                      {product.name}
+                    </button>
                   </td>
                   <td className="px-4 py-3.5 text-gray-700">
-                    {product.importPrice?.toLocaleString("vi-VN")}đ
+                    {product.price?.toLocaleString("vi-VN")}đ
                   </td>
                   <td className="px-4 py-3.5 text-gray-500">{product.unit || "-"}</td>
                   <td className="px-4 py-3.5">
@@ -344,21 +399,41 @@ const ProductManagement = () => {
                   <td className="px-4 py-3.5 text-gray-500">
                     {product.supplier?.name || "-"}
                   </td>
-                  <td className="px-4 py-3.5 text-center">
-                    <div className="inline-flex items-center gap-1">
-                      <button
-                        onClick={() => handleEdit(product)}
-                        className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                  <td className="px-4 py-3.5 text-center relative">
+                    <button
+                      onClick={() => setOpenMenuId(openMenuId === product._id ? null : product._id)}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                      aria-label="Mở menu"
+                    >
+                      <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10 6a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm0 5.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm0 5.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3z" />
+                      </svg>
+                    </button>
+                    {openMenuId === product._id && (
+                      <div
+                        ref={menuRef}
+                        className="absolute right-4 top-12 z-20 w-36 rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
                       >
-                        Sửa
-                      </button>
-                      <button
-                        onClick={() => handleDelete(product._id)}
-                        className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
-                      >
-                        Xóa
-                      </button>
-                    </div>
+                        <button
+                          onClick={() => { setOpenMenuId(null); setDetailProduct(product); }}
+                          className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          Chi tiết
+                        </button>
+                        <button
+                          onClick={() => { setOpenMenuId(null); handleEdit(product); }}
+                          className="block w-full px-4 py-2 text-left text-sm text-blue-700 hover:bg-blue-50"
+                        >
+                          Sửa
+                        </button>
+                        <button
+                          onClick={() => { setOpenMenuId(null); askDelete(product); }}
+                          className="block w-full px-4 py-2 text-left text-sm text-red-700 hover:bg-red-50"
+                        >
+                          Xóa
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))
@@ -383,6 +458,24 @@ const ProductManagement = () => {
           onSuccess={handleFormSuccess}
         />
       )}
+
+      <ProductDetailModal
+        product={detailProduct}
+        onClose={() => setDetailProduct(null)}
+        onEdit={() => { const p = detailProduct; setDetailProduct(null); handleEdit(p); }}
+        onDelete={() => { const p = detailProduct; setDetailProduct(null); askDelete(p); }}
+      />
+
+      <ConfirmModal
+        open={!!confirm}
+        title={confirm?.title}
+        message={confirm?.message}
+        confirmText={confirm?.confirmText}
+        variant={confirm?.variant}
+        loading={bulkBusy}
+        onConfirm={runConfirm}
+        onCancel={() => setConfirm(null)}
+      />
     </div>
   );
 };

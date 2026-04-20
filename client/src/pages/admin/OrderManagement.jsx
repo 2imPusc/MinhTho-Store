@@ -1,8 +1,11 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import orderService from "../../services/orderService";
 import Pagination from "../../components/Pagination";
 import InvoicePrint from "../../components/InvoicePrint";
+import OrderDetailModal from "../../components/OrderDetailModal";
+import ConfirmModal from "../../components/ConfirmModal";
+import PaymentFormModal from "../../components/PaymentFormModal";
 import { exportOrders } from "../../utils/exportExcel";
 
 const PAGE_SIZE = 20;
@@ -18,8 +21,21 @@ const OrderManagement = () => {
   const [error, setError] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [printOrder, setPrintOrder] = useState(null);
+  const [detailOrder, setDetailOrder] = useState(null);
+  const [payOrder, setPayOrder] = useState(null);
+  const [confirm, setConfirm] = useState(null);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setOpenMenuId(null);
+    };
+    if (openMenuId) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [openMenuId]);
 
   const fetchOrders = async () => {
     try {
@@ -64,14 +80,18 @@ const OrderManagement = () => {
 
   useMemo(() => { setCurrentPage(1); }, [search, statusFilter, fromDate, toDate]);
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Bạn có chắc muốn xóa đơn hàng này?")) return;
-    try {
-      await orderService.delete(id);
-      setOrders((prev) => prev.filter((o) => o._id !== id));
-    } catch (err) {
-      setError("Xóa đơn hàng thất bại");
-    }
+  const askDelete = (order) => {
+    setConfirm({
+      title: "Xóa đơn hàng",
+      message: `Xóa đơn của "${order.customer?.name || "Khách vãng lai"}" (${order.totalAmount?.toLocaleString("vi-VN")}đ)?\nTồn kho sẽ được hoàn trả.`,
+      confirmText: "Xóa",
+      variant: "danger",
+      action: async () => {
+        await orderService.delete(order._id);
+        setOrders((prev) => prev.filter((o) => o._id !== order._id));
+      },
+      errorMsg: "Xóa đơn hàng thất bại",
+    });
   };
 
   const toggleSelect = (id) => {
@@ -96,44 +116,66 @@ const OrderManagement = () => {
 
   const clearSelection = () => setSelectedIds(new Set());
 
-  const handleBulkDelete = async () => {
+  const askBulkDelete = () => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
-    if (!window.confirm(`Xóa ${ids.length} đơn hàng đã chọn? Tồn kho sẽ được hoàn trả.`)) return;
-    setBulkBusy(true);
-    try {
-      await orderService.bulkDelete(ids);
-      clearSelection();
-      fetchOrders();
-    } catch (err) {
-      setError(err.response?.data?.message || "Xóa hàng loạt thất bại");
-    } finally {
-      setBulkBusy(false);
-    }
+    setConfirm({
+      title: "Xóa hàng loạt",
+      message: `Xóa ${ids.length} đơn hàng đã chọn? Tồn kho sẽ được hoàn trả.`,
+      confirmText: "Xóa tất cả",
+      variant: "danger",
+      action: async () => {
+        await orderService.bulkDelete(ids);
+        clearSelection();
+        fetchOrders();
+      },
+      errorMsg: "Xóa hàng loạt thất bại",
+    });
   };
 
-  const handleBulkMarkPaid = async () => {
+  const askBulkMarkPaid = () => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
-    if (!window.confirm(`Đánh dấu ${ids.length} đơn đã thanh toán đầy đủ?`)) return;
-    setBulkBusy(true);
-    try {
-      await orderService.bulkMarkPaid(ids);
-      clearSelection();
-      fetchOrders();
-    } catch (err) {
-      setError(err.response?.data?.message || "Thao tác hàng loạt thất bại");
-    } finally {
-      setBulkBusy(false);
-    }
+    setConfirm({
+      title: "Đánh dấu đã trả",
+      message: `Đánh dấu ${ids.length} đơn đã thanh toán đầy đủ?`,
+      confirmText: "Xác nhận",
+      variant: "success",
+      action: async () => {
+        await orderService.bulkMarkPaid(ids);
+        clearSelection();
+        fetchOrders();
+      },
+      errorMsg: "Thao tác hàng loạt thất bại",
+    });
   };
 
-  const handleMarkPaid = async (id) => {
+  const askMarkPaid = (order) => {
+    const remaining = order.totalAmount - order.paidAmount;
+    setConfirm({
+      title: "Đánh dấu đã trả đủ",
+      message: `Xác nhận khách "${order.customer?.name || "Khách vãng lai"}" đã trả đủ ${remaining.toLocaleString("vi-VN")}đ?`,
+      confirmText: "Đã trả đủ",
+      variant: "success",
+      action: async () => {
+        await orderService.markPaid(order._id);
+        fetchOrders();
+      },
+      errorMsg: "Có lỗi xảy ra",
+    });
+  };
+
+  const runConfirm = async () => {
+    if (!confirm) return;
+    setBulkBusy(true);
     try {
-      await orderService.markPaid(id);
-      fetchOrders();
+      await confirm.action();
+      setConfirm(null);
     } catch (err) {
-      setError(err.response?.data?.message || "Có lỗi xảy ra");
+      setError(err.response?.data?.message || confirm.errorMsg || "Thao tác thất bại");
+      setConfirm(null);
+    } finally {
+      setBulkBusy(false);
     }
   };
 
@@ -250,14 +292,14 @@ const OrderManagement = () => {
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
           <span className="text-sm font-semibold text-blue-800">Đã chọn {selectedIds.size} đơn</span>
           <button
-            onClick={handleBulkMarkPaid}
+            onClick={askBulkMarkPaid}
             disabled={bulkBusy}
             className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50"
           >
             Đánh dấu đã trả
           </button>
           <button
-            onClick={handleBulkDelete}
+            onClick={askBulkDelete}
             disabled={bulkBusy}
             className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
           >
@@ -349,8 +391,13 @@ const OrderManagement = () => {
                           className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                         />
                       </td>
-                      <td className="px-5 py-3.5 font-medium text-gray-900">
-                        {order.customer?.name || "Khách vãng lai"}
+                      <td className="px-5 py-3.5 font-medium">
+                        <button
+                          onClick={() => setDetailOrder(order)}
+                          className="text-blue-600 hover:text-blue-800 hover:underline text-left"
+                        >
+                          {order.customer?.name || "Khách vãng lai"}
+                        </button>
                       </td>
                       <td className="px-5 py-3.5 text-center text-gray-600">
                         {order.items?.length || 0}
@@ -384,29 +431,51 @@ const OrderManagement = () => {
                       <td className="px-5 py-3.5 text-gray-500">
                         {new Date(order.createdAt).toLocaleDateString("vi-VN")}
                       </td>
-                      <td className="px-5 py-3.5 text-center">
-                        <div className="inline-flex items-center gap-2">
-                          {!isPaid && (
+                      <td className="px-5 py-3.5 text-center relative">
+                        <button
+                          onClick={() => setOpenMenuId(openMenuId === order._id ? null : order._id)}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                          aria-label="Mở menu"
+                        >
+                          <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M10 6a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm0 5.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm0 5.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3z" />
+                          </svg>
+                        </button>
+                        {openMenuId === order._id && (
+                          <div
+                            ref={menuRef}
+                            className="absolute right-4 top-12 z-20 w-40 rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+                          >
                             <button
-                              onClick={() => handleMarkPaid(order._id)}
-                              className="rounded-lg bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 transition hover:bg-green-100"
+                              onClick={() => { setOpenMenuId(null); setPrintOrder(order); }}
+                              className="block w-full px-4 py-2 text-left text-sm text-blue-700 hover:bg-blue-50"
                             >
-                              Trả đủ
+                              In hóa đơn
                             </button>
-                          )}
-                          <button
-                            onClick={() => setPrintOrder(order)}
-                            className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
-                          >
-                            In
-                          </button>
-                          <button
-                            onClick={() => handleDelete(order._id)}
-                            className="text-xs font-medium text-red-500 transition hover:text-red-700 hover:underline"
-                          >
-                            Xóa
-                          </button>
-                        </div>
+                            {!isPaid && (
+                              <>
+                                <button
+                                  onClick={() => { setOpenMenuId(null); setPayOrder(order); }}
+                                  className="block w-full px-4 py-2 text-left text-sm text-green-700 hover:bg-green-50"
+                                >
+                                  Thanh toán
+                                </button>
+                                <button
+                                  onClick={() => { setOpenMenuId(null); askMarkPaid(order); }}
+                                  className="block w-full px-4 py-2 text-left text-sm text-green-700 hover:bg-green-50"
+                                >
+                                  Đánh dấu trả đủ
+                                </button>
+                              </>
+                            )}
+                            <button
+                              onClick={() => { setOpenMenuId(null); askDelete(order); }}
+                              className="block w-full px-4 py-2 text-left text-sm text-red-700 hover:bg-red-50"
+                            >
+                              Xóa
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
@@ -428,6 +497,33 @@ const OrderManagement = () => {
       {printOrder && (
         <InvoicePrint order={printOrder} onClose={() => setPrintOrder(null)} />
       )}
+
+      {detailOrder && (
+        <OrderDetailModal
+          order={detailOrder}
+          onClose={() => setDetailOrder(null)}
+          onPay={(o) => { setDetailOrder(null); setPayOrder(o); }}
+        />
+      )}
+
+      {payOrder && (
+        <PaymentFormModal
+          order={payOrder}
+          onClose={() => setPayOrder(null)}
+          onSuccess={() => { setPayOrder(null); fetchOrders(); }}
+        />
+      )}
+
+      <ConfirmModal
+        open={!!confirm}
+        title={confirm?.title}
+        message={confirm?.message}
+        confirmText={confirm?.confirmText}
+        variant={confirm?.variant}
+        loading={bulkBusy}
+        onConfirm={runConfirm}
+        onCancel={() => setConfirm(null)}
+      />
     </div>
   );
 };

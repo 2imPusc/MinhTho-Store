@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import customerService from "../../services/customerService";
 import CustomerForm from "../../components/CustomerForm";
+import ConfirmModal from "../../components/ConfirmModal";
 import Pagination from "../../components/Pagination";
 import { exportCustomers } from "../../utils/exportExcel";
 
@@ -24,6 +25,31 @@ const CustomerManagement = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [confirm, setConfirm] = useState(null);
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setOpenMenuId(null);
+    };
+    if (openMenuId) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [openMenuId]);
+
+  const runConfirm = async () => {
+    if (!confirm) return;
+    setBulkBusy(true);
+    try {
+      await confirm.action();
+      setConfirm(null);
+    } catch (err) {
+      setError(err.response?.data?.message || confirm.errorMsg || "Thao tác thất bại");
+      setConfirm(null);
+    } finally {
+      setBulkBusy(false);
+    }
+  };
 
   const fetchCustomers = async () => {
     try {
@@ -78,30 +104,35 @@ const CustomerManagement = () => {
     });
   };
   const clearSelection = () => setSelectedIds(new Set());
-  const handleBulkDelete = async () => {
+  const askBulkDelete = () => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
-    if (!window.confirm(`Xóa ${ids.length} khách hàng đã chọn?`)) return;
-    setBulkBusy(true);
-    try {
-      await customerService.bulkDelete(ids);
-      clearSelection();
-      fetchCustomers();
-    } catch (err) {
-      setError(err.response?.data?.message || "Xóa hàng loạt thất bại");
-    } finally {
-      setBulkBusy(false);
-    }
+    setConfirm({
+      title: "Xóa hàng loạt",
+      message: `Xóa ${ids.length} khách hàng đã chọn?`,
+      confirmText: "Xóa tất cả",
+      variant: "danger",
+      action: async () => {
+        await customerService.bulkDelete(ids);
+        clearSelection();
+        fetchCustomers();
+      },
+      errorMsg: "Xóa hàng loạt thất bại",
+    });
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Bạn có chắc muốn xóa khách hàng này?")) return;
-    try {
-      await customerService.delete(id);
-      setCustomers((prev) => prev.filter((c) => c._id !== id));
-    } catch (err) {
-      setError("Xóa khách hàng thất bại");
-    }
+  const askDelete = (customer) => {
+    setConfirm({
+      title: "Xóa khách hàng",
+      message: `Xóa khách "${customer.name}"?`,
+      confirmText: "Xóa",
+      variant: "danger",
+      action: async () => {
+        await customerService.delete(customer._id);
+        setCustomers((prev) => prev.filter((c) => c._id !== customer._id));
+      },
+      errorMsg: "Xóa khách hàng thất bại",
+    });
   };
 
   const handleEdit = (customer) => {
@@ -235,7 +266,7 @@ const CustomerManagement = () => {
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
           <span className="text-sm font-semibold text-blue-800">Đã chọn {selectedIds.size} khách hàng</span>
           <button
-            onClick={handleBulkDelete}
+            onClick={askBulkDelete}
             disabled={bulkBusy}
             className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
           >
@@ -296,7 +327,14 @@ const CustomerManagement = () => {
                       className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                   </td>
-                  <td className="px-4 py-3.5 font-medium text-gray-900">{customer.name}</td>
+                  <td className="px-4 py-3.5">
+                    <button
+                      onClick={() => navigate(`/admin/customers/${customer._id}/debt`)}
+                      className="font-medium text-blue-700 hover:text-blue-900 hover:underline text-left"
+                    >
+                      {customer.name}
+                    </button>
+                  </td>
                   <td className="px-4 py-3.5 text-gray-500 font-mono text-xs">{customer.phone || "-"}</td>
                   <td className="px-4 py-3.5 text-gray-500">{customer.address || "-"}</td>
                   <td className="px-4 py-3.5">
@@ -313,27 +351,41 @@ const CustomerManagement = () => {
                   <td className="px-4 py-3.5 text-gray-400 max-w-[200px] truncate">
                     {customer.note || "-"}
                   </td>
-                  <td className="px-4 py-3.5 text-center">
-                    <div className="inline-flex items-center gap-1">
-                      <button
-                        onClick={() => navigate(`/admin/customers/${customer._id}/debt`)}
-                        className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
+                  <td className="px-4 py-3.5 text-center relative">
+                    <button
+                      onClick={() => setOpenMenuId(openMenuId === customer._id ? null : customer._id)}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                      aria-label="Mở menu"
+                    >
+                      <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10 6a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm0 5.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm0 5.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3z" />
+                      </svg>
+                    </button>
+                    {openMenuId === customer._id && (
+                      <div
+                        ref={menuRef}
+                        className="absolute right-4 top-12 z-20 w-40 rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
                       >
-                        Công nợ
-                      </button>
-                      <button
-                        onClick={() => handleEdit(customer)}
-                        className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
-                      >
-                        Sửa
-                      </button>
-                      <button
-                        onClick={() => handleDelete(customer._id)}
-                        className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
-                      >
-                        Xóa
-                      </button>
-                    </div>
+                        <button
+                          onClick={() => { setOpenMenuId(null); navigate(`/admin/customers/${customer._id}/debt`); }}
+                          className="block w-full px-4 py-2 text-left text-sm text-green-700 hover:bg-green-50"
+                        >
+                          Công nợ
+                        </button>
+                        <button
+                          onClick={() => { setOpenMenuId(null); handleEdit(customer); }}
+                          className="block w-full px-4 py-2 text-left text-sm text-blue-700 hover:bg-blue-50"
+                        >
+                          Sửa
+                        </button>
+                        <button
+                          onClick={() => { setOpenMenuId(null); askDelete(customer); }}
+                          className="block w-full px-4 py-2 text-left text-sm text-red-700 hover:bg-red-50"
+                        >
+                          Xóa
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))
@@ -357,6 +409,17 @@ const CustomerManagement = () => {
           onSuccess={handleFormSuccess}
         />
       )}
+
+      <ConfirmModal
+        open={!!confirm}
+        title={confirm?.title}
+        message={confirm?.message}
+        confirmText={confirm?.confirmText}
+        variant={confirm?.variant}
+        loading={bulkBusy}
+        onConfirm={runConfirm}
+        onCancel={() => setConfirm(null)}
+      />
     </div>
   );
 };

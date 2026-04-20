@@ -14,6 +14,7 @@ import OrderCreate from './pages/admin/OrderCreate';
 import CustomerDebt from './pages/admin/CustomerDebt';
 import SupplierManagement from './pages/admin/SupplierManagement';
 import PaymentManagement from './pages/admin/PaymentManagement';
+import Dashboard from './pages/Dashboard';
 
 function App() {
   const { user } = useAuth();
@@ -23,16 +24,17 @@ function App() {
     <BrowserRouter>
       <Header />
       <Routes>
-        <Route path="/" element={isAdmin ? <Navigate to="/admin/products" replace /> : <HomePage />} />
-        <Route path="/login" element={user ? <Navigate to={isAdmin ? "/admin/products" : "/"} replace /> : <LoginPage />} />
-        <Route path="/register" element={user ? <Navigate to={isAdmin ? "/admin/products" : "/"} replace /> : <RegisterPage />} />
+        <Route path="/" element={isAdmin ? <Navigate to="/admin/dashboard" replace /> : <HomePage />} />
+        <Route path="/login" element={user ? <Navigate to={isAdmin ? "/admin/dashboard" : "/"} replace /> : <LoginPage />} />
+        <Route path="/register" element={user ? <Navigate to={isAdmin ? "/admin/dashboard" : "/"} replace /> : <RegisterPage />} />
 
         {/* Admin routes */}
         <Route
           path="/admin"
           element={isAdmin ? <AdminLayout /> : <Navigate to="/login" replace />}
         >
-          <Route index element={<Navigate to="/admin/products" replace />} />
+          <Route index element={<Navigate to="/admin/dashboard" replace />} />
+          <Route path="dashboard" element={<Dashboard />} />
           <Route path="products" element={<ProductManagement />} />
           <Route path="customers" element={<CustomerManagement />} />
           <Route path="customers/:customerId/debt" element={<CustomerDebt />} />

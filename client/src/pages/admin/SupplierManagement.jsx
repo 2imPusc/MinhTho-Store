@@ -1,6 +1,9 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+
 import supplierService from "../../services/supplierService";
 import SupplierForm from "../../components/SupplierForm";
+import ConfirmModal from "../../components/ConfirmModal";
+import InfoModal from "../../components/InfoModal";
 import Pagination from "../../components/Pagination";
 
 const PAGE_SIZE = 20;
@@ -13,12 +16,40 @@ const SupplierManagement = () => {
   const [editing, setEditing] = useState(null);
   const [error, setError] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [confirm, setConfirm] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [detail, setDetail] = useState(null);
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setOpenMenuId(null);
+    };
+    if (openMenuId) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [openMenuId]);
+
+  const runConfirm = async () => {
+    if (!confirm) return;
+    setBusy(true);
+    try {
+      await confirm.action();
+      setConfirm(null);
+    } catch (err) {
+      setError(err.response?.data?.message || confirm.errorMsg || "Thao tác thất bại");
+      setConfirm(null);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const fetchSuppliers = async () => {
     try {
       setLoading(true);
       const res = await supplierService.getAll();
-      setSuppliers(res.data || []);
+      const payload = res.data;
+      setSuppliers(Array.isArray(payload) ? payload : payload?.data || []);
     } catch {
       setError("Không thể tải danh sách nhà cung cấp");
     } finally {
@@ -47,18 +78,22 @@ const SupplierManagement = () => {
     return filtered.slice(start, start + PAGE_SIZE);
   }, [filtered, currentPage]);
 
-  useMemo(() => {
+  useEffect(() => {
     setCurrentPage(1);
   }, [search]);
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Bạn có chắc muốn xóa nhà cung cấp này?")) return;
-    try {
-      await supplierService.delete(id);
-      setSuppliers((prev) => prev.filter((s) => s._id !== id));
-    } catch {
-      setError("Xóa nhà cung cấp thất bại");
-    }
+  const askDelete = (s) => {
+    setConfirm({
+      title: "Xóa nhà cung cấp",
+      message: `Xóa nhà cung cấp "${s.name}"?`,
+      confirmText: "Xóa",
+      variant: "danger",
+      action: async () => {
+        await supplierService.delete(s._id);
+        setSuppliers((prev) => prev.filter((x) => x._id !== s._id));
+      },
+      errorMsg: "Xóa nhà cung cấp thất bại",
+    });
   };
 
   const handleEdit = (supplier) => {
@@ -159,26 +194,53 @@ const SupplierManagement = () => {
             ) : (
               paginated.map((s) => (
                 <tr key={s._id} className="hover:bg-gray-50/50 transition-colors">
-                  <td className="px-4 py-3.5 font-medium text-gray-900">{s.name}</td>
+                  <td className="px-4 py-3.5">
+                    <button
+                      onClick={() => setDetail(s)}
+                      className="font-medium text-blue-700 hover:text-blue-900 hover:underline text-left"
+                    >
+                      {s.name}
+                    </button>
+                  </td>
                   <td className="px-4 py-3.5 text-gray-500 font-mono text-xs">{s.phone || "-"}</td>
                   <td className="px-4 py-3.5 text-gray-500">{s.address || "-"}</td>
                   <td className="px-4 py-3.5 text-gray-500 max-w-[200px] truncate">{s.paymentInfo || "-"}</td>
                   <td className="px-4 py-3.5 text-gray-400 max-w-[200px] truncate">{s.note || "-"}</td>
-                  <td className="px-4 py-3.5 text-center">
-                    <div className="inline-flex items-center gap-1">
-                      <button
-                        onClick={() => handleEdit(s)}
-                        className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                  <td className="px-4 py-3.5 text-center relative">
+                    <button
+                      onClick={() => setOpenMenuId(openMenuId === s._id ? null : s._id)}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                      aria-label="Mở menu"
+                    >
+                      <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10 6a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm0 5.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm0 5.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3z" />
+                      </svg>
+                    </button>
+                    {openMenuId === s._id && (
+                      <div
+                        ref={menuRef}
+                        className="absolute right-4 top-12 z-20 w-36 rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
                       >
-                        Sửa
-                      </button>
-                      <button
-                        onClick={() => handleDelete(s._id)}
-                        className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
-                      >
-                        Xóa
-                      </button>
-                    </div>
+                        <button
+                          onClick={() => { setOpenMenuId(null); setDetail(s); }}
+                          className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          Chi tiết
+                        </button>
+                        <button
+                          onClick={() => { setOpenMenuId(null); handleEdit(s); }}
+                          className="block w-full px-4 py-2 text-left text-sm text-blue-700 hover:bg-blue-50"
+                        >
+                          Sửa
+                        </button>
+                        <button
+                          onClick={() => { setOpenMenuId(null); askDelete(s); }}
+                          className="block w-full px-4 py-2 text-left text-sm text-red-700 hover:bg-red-50"
+                        >
+                          Xóa
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))
@@ -198,6 +260,39 @@ const SupplierManagement = () => {
       {showForm && (
         <SupplierForm supplier={editing} onClose={handleFormClose} onSuccess={handleFormSuccess} />
       )}
+
+      <InfoModal
+        open={!!detail}
+        title="Thông tin nhà cung cấp"
+        rows={detail ? [
+          ["Tên", detail.name],
+          ["SĐT", detail.phone || "-"],
+          ["Địa chỉ", detail.address || "-"],
+          ["Thanh toán", detail.paymentInfo || "-"],
+          ["Ghi chú", detail.note || "-"],
+        ] : []}
+        onClose={() => setDetail(null)}
+        footer={detail && (
+          <>
+            <button onClick={() => setDetail(null)} className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200">Đóng</button>
+            <button
+              onClick={() => { const s = detail; setDetail(null); handleEdit(s); }}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+            >Sửa</button>
+          </>
+        )}
+      />
+
+      <ConfirmModal
+        open={!!confirm}
+        title={confirm?.title}
+        message={confirm?.message}
+        confirmText={confirm?.confirmText}
+        variant={confirm?.variant}
+        loading={busy}
+        onConfirm={runConfirm}
+        onCancel={() => setConfirm(null)}
+      />
     </div>
   );
 };

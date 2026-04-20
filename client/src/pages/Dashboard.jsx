@@ -14,6 +14,8 @@ import {
 } from "recharts";
 import orderService from "../services/orderService";
 import paymentService from "../services/paymentService";
+import OrderDetailModal from "../components/OrderDetailModal";
+import PaymentFormModal from "../components/PaymentFormModal";
 
 const RANGE_OPTIONS = [
   { value: 7, label: "7 ngày" },
@@ -33,6 +35,16 @@ const Dashboard = () => {
   const [debts, setDebts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [rangeDays, setRangeDays] = useState(30);
+  const [detailOrder, setDetailOrder] = useState(null);
+  const [payOrder, setPayOrder] = useState(null);
+
+  const refetchOrders = async () => {
+    try {
+      const res = await orderService.getAll();
+      const d = res?.data;
+      setOrders(Array.isArray(d) ? d : d?.data || []);
+    } catch { /* ignore */ }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -41,8 +53,12 @@ const Dashboard = () => {
           orderService.getAll(),
           paymentService.getAllDebts(),
         ]);
-        setOrders(ordersRes.data);
-        setDebts(debtsRes.data);
+        const unwrap = (r) => {
+          const d = r?.data;
+          return Array.isArray(d) ? d : d?.data || [];
+        };
+        setOrders(unwrap(ordersRes));
+        setDebts(unwrap(debtsRes));
       } catch (err) {
         // silent fail on dashboard
       } finally {
@@ -216,7 +232,12 @@ const Dashboard = () => {
       {/* Two column: top products + top debtors */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl shadow-sm p-5">
-          <h3 className="font-semibold text-gray-800 mb-4">Top 5 sản phẩm ({rangeDays} ngày)</h3>
+          <h3
+            onClick={() => navigate("/admin/products")}
+            className="font-semibold text-gray-800 mb-4 cursor-pointer hover:text-blue-700 hover:underline inline-block"
+          >
+            Top 5 sản phẩm ({rangeDays} ngày)
+          </h3>
           {topProducts.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-12">Chưa có dữ liệu</p>
           ) : (
@@ -235,7 +256,12 @@ const Dashboard = () => {
         </div>
 
         <div className="bg-white rounded-xl shadow-sm p-5">
-          <h3 className="font-semibold text-gray-800 mb-4">Top 5 khách nợ</h3>
+          <h3
+            onClick={() => navigate("/admin/customers")}
+            className="font-semibold text-gray-800 mb-4 cursor-pointer hover:text-blue-700 hover:underline inline-block"
+          >
+            Top 5 khách nợ
+          </h3>
           {topDebtors.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-12">Không có khách nợ</p>
           ) : (
@@ -258,7 +284,18 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h3 className="font-semibold text-gray-800">Khách hàng còn nợ</h3>
+            <h3
+              onClick={() => navigate("/admin/customers")}
+              className="font-semibold text-gray-800 cursor-pointer hover:text-blue-700 hover:underline"
+            >
+              Khách hàng còn nợ
+            </h3>
+            <button
+              onClick={() => navigate("/admin/customers")}
+              className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors"
+            >
+              Xem tất cả
+            </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -267,18 +304,21 @@ const Dashboard = () => {
                   <th className="px-5 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Khách hàng</th>
                   <th className="px-5 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Loại</th>
                   <th className="px-5 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider text-right">Còn nợ</th>
-                  <th className="px-5 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider text-center">Chi tiết</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {stats.customersWithDebt.length === 0 ? (
                   <tr>
-                    <td colSpan="4" className="px-5 py-8 text-center text-gray-400">Không có khách nợ</td>
+                    <td colSpan="3" className="px-5 py-8 text-center text-gray-400">Không có khách nợ</td>
                   </tr>
                 ) : (
                   stats.customersWithDebt.slice(0, 8).map((d) => (
-                    <tr key={d.customer._id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-5 py-3 font-medium text-gray-800">{d.customer.name}</td>
+                    <tr
+                      key={d.customer._id}
+                      onClick={() => navigate(`/admin/customers/${d.customer._id}/debt`)}
+                      className="hover:bg-blue-50/60 transition-colors cursor-pointer"
+                    >
+                      <td className="px-5 py-3 font-medium text-blue-700">{d.customer.name}</td>
                       <td className="px-5 py-3">
                         <span
                           className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -291,14 +331,6 @@ const Dashboard = () => {
                       <td className="px-5 py-3 text-right text-red-600 font-semibold">
                         {d.totalDebt.toLocaleString("vi-VN")}đ
                       </td>
-                      <td className="px-5 py-3 text-center">
-                        <button
-                          onClick={() => navigate(`/admin/customers/${d.customer._id}/debt`)}
-                          className="text-blue-600 hover:text-blue-800 hover:underline text-sm font-medium transition-colors"
-                        >
-                          Xem
-                        </button>
-                      </td>
                     </tr>
                   ))
                 )}
@@ -309,7 +341,12 @@ const Dashboard = () => {
 
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h3 className="font-semibold text-gray-800">Đơn hàng gần đây</h3>
+            <h3
+              onClick={() => navigate("/admin/orders")}
+              className="font-semibold text-gray-800 cursor-pointer hover:text-blue-700 hover:underline"
+            >
+              Đơn hàng gần đây
+            </h3>
             <button
               onClick={() => navigate("/admin/orders")}
               className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors"
@@ -336,8 +373,12 @@ const Dashboard = () => {
                   recentOrders.map((order) => {
                     const isPaid = order.paidAmount >= order.totalAmount;
                     return (
-                      <tr key={order._id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-5 py-3 font-medium text-gray-800">{order.customer?.name || "Vãng lai"}</td>
+                      <tr
+                        key={order._id}
+                        onClick={() => setDetailOrder(order)}
+                        className="hover:bg-blue-50/60 transition-colors cursor-pointer"
+                      >
+                        <td className="px-5 py-3 font-medium text-blue-700">{order.customer?.name || "Vãng lai"}</td>
                         <td className="px-5 py-3 text-right font-medium text-gray-800">
                           {order.totalAmount?.toLocaleString("vi-VN")}đ
                         </td>
@@ -362,6 +403,22 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
+
+      {detailOrder && (
+        <OrderDetailModal
+          order={detailOrder}
+          onClose={() => setDetailOrder(null)}
+          onPay={(o) => { setDetailOrder(null); setPayOrder(o); }}
+        />
+      )}
+
+      {payOrder && (
+        <PaymentFormModal
+          order={payOrder}
+          onClose={() => setPayOrder(null)}
+          onSuccess={() => { setPayOrder(null); refetchOrders(); }}
+        />
+      )}
     </div>
   );
 };

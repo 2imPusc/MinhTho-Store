@@ -1,5 +1,7 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import paymentService from "../../services/paymentService";
+import ConfirmModal from "../../components/ConfirmModal";
+import InfoModal from "../../components/InfoModal";
 import Pagination from "../../components/Pagination";
 import { exportPayments } from "../../utils/exportExcel";
 
@@ -15,6 +17,33 @@ const PaymentManagement = () => {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [confirm, setConfirm] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const [detail, setDetail] = useState(null);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setOpenMenuId(null);
+    };
+    if (openMenuId) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [openMenuId]);
+
+  const runConfirm = async () => {
+    if (!confirm) return;
+    setBusy(true);
+    try {
+      await confirm.action();
+      setConfirm(null);
+    } catch (err) {
+      setError(err.response?.data?.message || confirm.errorMsg || "Thao tác thất bại");
+      setConfirm(null);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const fetchPayments = async () => {
     try {
@@ -65,14 +94,18 @@ const PaymentManagement = () => {
 
   useMemo(() => { setCurrentPage(1); }, [search, methodFilter, typeFilter, fromDate, toDate]);
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Bạn có chắc muốn xóa thanh toán này? Đơn hàng liên quan sẽ được trừ ngược số tiền đã trả.")) return;
-    try {
-      await paymentService.delete(id);
-      setPayments((prev) => prev.filter((p) => p._id !== id));
-    } catch (err) {
-      setError(err.response?.data?.message || "Xóa thất bại");
-    }
+  const askDelete = (p) => {
+    setConfirm({
+      title: "Xóa thanh toán",
+      message: `Xóa thanh toán ${p.amount?.toLocaleString("vi-VN")}đ của "${p.customer?.name || "khách"}"?\nĐơn hàng liên quan sẽ được trừ ngược số tiền đã trả.`,
+      confirmText: "Xóa",
+      variant: "danger",
+      action: async () => {
+        await paymentService.delete(p._id);
+        setPayments((prev) => prev.filter((x) => x._id !== p._id));
+      },
+      errorMsg: "Xóa thất bại",
+    });
   };
 
   if (loading)
@@ -194,7 +227,9 @@ const PaymentManagement = () => {
                       {new Date(p.createdAt).toLocaleString("vi-VN")}
                     </td>
                     <td className="px-5 py-3.5">
-                      <div className="font-medium text-gray-900">{p.customer?.name || "-"}</div>
+                      <button onClick={() => setDetail(p)} className="font-medium text-blue-700 hover:text-blue-900 hover:underline text-left">
+                        {p.customer?.name || "-"}
+                      </button>
                       {p.customer?.phone && <div className="text-xs text-gray-500">{p.customer.phone}</div>}
                     </td>
                     <td className="px-5 py-3.5 text-right font-semibold text-green-600">
@@ -211,13 +246,29 @@ const PaymentManagement = () => {
                       </span>
                     </td>
                     <td className="px-5 py-3.5 text-gray-500 max-w-xs truncate" title={p.note}>{p.note || "-"}</td>
-                    <td className="px-5 py-3.5 text-center">
+                    <td className="px-5 py-3.5 text-center relative">
                       <button
-                        onClick={() => handleDelete(p._id)}
-                        className="text-xs font-medium text-red-500 transition hover:text-red-700 hover:underline"
+                        onClick={() => setOpenMenuId(openMenuId === p._id ? null : p._id)}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                        aria-label="Mở menu"
                       >
-                        Xóa
+                        <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M10 6a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm0 5.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm0 5.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3z" />
+                        </svg>
                       </button>
+                      {openMenuId === p._id && (
+                        <div
+                          ref={menuRef}
+                          className="absolute right-4 top-12 z-20 w-32 rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+                        >
+                          <button
+                            onClick={() => { setOpenMenuId(null); askDelete(p); }}
+                            className="block w-full px-4 py-2 text-left text-sm text-red-700 hover:bg-red-50"
+                          >
+                            Xóa
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -233,6 +284,33 @@ const PaymentManagement = () => {
         onPageChange={setCurrentPage}
         totalItems={filtered.length}
         pageSize={PAGE_SIZE}
+      />
+
+      <InfoModal
+        open={!!detail}
+        title="Chi tiết thanh toán"
+        rows={detail ? [
+          ["Ngày", new Date(detail.createdAt).toLocaleString("vi-VN")],
+          ["Khách hàng", detail.customer?.name || "-"],
+          ["SĐT", detail.customer?.phone || "-"],
+          ["Số tiền", <span className="text-green-600 font-semibold">+{detail.amount?.toLocaleString("vi-VN")}đ</span>],
+          ["Phương thức", detail.method === "Chuyen khoan" ? "Chuyển khoản" : "Tiền mặt"],
+          ["Loại", detail.order ? "Theo đơn" : "Công nợ chung"],
+          ["Ghi chú", detail.note || "-"],
+        ] : []}
+        onClose={() => setDetail(null)}
+        footer={<button onClick={() => setDetail(null)} className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200">Đóng</button>}
+      />
+
+      <ConfirmModal
+        open={!!confirm}
+        title={confirm?.title}
+        message={confirm?.message}
+        confirmText={confirm?.confirmText}
+        variant={confirm?.variant}
+        loading={busy}
+        onConfirm={runConfirm}
+        onCancel={() => setConfirm(null)}
       />
     </div>
   );

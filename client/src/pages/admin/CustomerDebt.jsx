@@ -77,36 +77,19 @@ const CustomerDebt = () => {
     setShowPayForm(true);
   };
 
-  if (loading)
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
-        <span className="ml-3 text-sm text-gray-500">Đang tải dữ liệu...</span>
-      </div>
-    );
+  const isDateFiltered = Boolean(fromDate || toDate);
 
-  if (!data)
-    return (
-      <div className="flex flex-col items-center justify-center py-20">
-        <svg className="h-12 w-12 text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <p className="mt-3 text-sm text-red-500">{error}</p>
-      </div>
-    );
-
-  const { customer, totalOrdered: totalOrderedAll, totalPaid: totalPaidAll, totalDebt: totalDebtAll, orders: allOrders, generalPayments: allGeneralPayments } = data;
-
-  const isDateFiltered = fromDate || toDate;
-
-  const { orders, generalPayments, totalOrdered, totalPaid, totalDebt } = useMemo(() => {
+  const filtered = useMemo(() => {
+    if (!data) return null;
+    const allOrders = data.orders || [];
+    const allGeneralPayments = data.generalPayments || [];
     if (!isDateFiltered) {
       return {
         orders: allOrders,
         generalPayments: allGeneralPayments,
-        totalOrdered: totalOrderedAll,
-        totalPaid: totalPaidAll,
-        totalDebt: totalDebtAll,
+        totalOrdered: data.totalOrdered,
+        totalPaid: data.totalPaid,
+        totalDebt: data.totalDebt,
       };
     }
     const fromTs = fromDate ? new Date(fromDate).setHours(0, 0, 0, 0) : null;
@@ -128,7 +111,28 @@ const CustomerDebt = () => {
       totalPaid: tPaid,
       totalDebt: tOrdered - tPaid,
     };
-  }, [allOrders, allGeneralPayments, totalOrderedAll, totalPaidAll, totalDebtAll, fromDate, toDate, isDateFiltered]);
+  }, [data, fromDate, toDate, isDateFiltered]);
+
+  if (loading)
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+        <span className="ml-3 text-sm text-gray-500">Đang tải dữ liệu...</span>
+      </div>
+    );
+
+  if (!data || !filtered)
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <svg className="h-12 w-12 text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <p className="mt-3 text-sm text-red-500">{error || "Không có dữ liệu"}</p>
+      </div>
+    );
+
+  const { customer } = data;
+  const { orders, generalPayments, totalOrdered, totalPaid, totalDebt } = filtered;
 
   return (
     <div className="space-y-6">

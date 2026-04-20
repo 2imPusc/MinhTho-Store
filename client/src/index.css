@@ -1,1 +1,52 @@
 @import "tailwindcss";
+
+/* === Design tokens — elderly-friendly UI ===
+ * Base font 16px (browser default), scale up headings và số tiền.
+ * Ưu tiên: dễ đọc, tương phản cao, touch target ≥ 48px.
+ */
+@theme {
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+
+  /* Semantic colors */
+  --color-brand: #1e40af;          /* blue-800 — primary */
+  --color-brand-hover: #1d4ed8;    /* blue-700 */
+  --color-success: #16a34a;        /* green-600 — đã thu / ok */
+  --color-danger: #dc2626;         /* red-600 — công nợ / xóa */
+  --color-warning: #d97706;        /* amber-600 — cảnh báo */
+  --color-muted: #64748b;          /* slate-500 */
+}
+
+html {
+  font-size: 16px;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: #0f172a; /* slate-900 — tương phản cao */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Touch target tối thiểu 44px trên mobile */
+@media (max-width: 768px) {
+  button, a[role="button"], .nav-item {
+    min-height: 44px;
+  }
+}
+
+/* Money utility — số tiền luôn đậm, tabular */
+.money {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.money-lg {
+  font-size: 1.25rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Chừa chỗ cho bottom nav trên mobile */
+@media (max-width: 767px) {
+  .pb-safe-bottom-nav {
+    padding-bottom: 5rem;
+  }
+}

@@ -11,7 +11,9 @@ const HomePage = () => {
     const fetchProducts = async () => {
       try {
         const res = await productService.getAll();
-        setProducts(res.data);
+        const payload = res.data;
+        const list = Array.isArray(payload) ? payload : payload?.data || [];
+        setProducts(list);
       } catch {
         // silent fail
       } finally {
